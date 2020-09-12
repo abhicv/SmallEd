@@ -54,20 +54,23 @@ int main(int argc, char *argv[])
     buffer.width = SCREEN_WIDTH;
     buffer.height = SCREEN_HEIGHT;
     
-    Rect rect = {0, 0, 30, SCREEN_HEIGHT};
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, SCREEN_WIDTH, SCREEN_HEIGHT);
     
     stbtt_fontinfo font;
-    u32 w, h;
-    u8 *bitmap = NULL;
-    Rect charRect = {0, 0, 0, 0};
-    FILE *fontFile = fopen("C:/Windows/Fonts/CourierPrime-Regular.ttf", "rb");
+    FILE *fontFile = fopen("C:/Windows/Fonts/JetBrainsMono-Regular.ttf", "rb");
     if(fontFile != NULL)
     {
         fread(ttf_buffer, 1, 1 << 25, fontFile);
-        stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer,0));
+        stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer, 0));
+        fclose(fontFile);
     }
-    fclose(fontFile);
+    
+    u32 size = 22;
+    f32 scale = stbtt_ScaleForPixelHeight(&font, size);
+    
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(&font, &ascent, &descent, &lineGap);
+    ascent = roundf(ascent * scale);
     
     b32 quit = false;
     while(!quit)
@@ -86,67 +89,73 @@ int main(int argc, char *argv[])
                 {
                     cIndex--;
                     textBuffer[cIndex] = 0;
-                    //printf("%s\n", textBuffer);
                 }
                 else if(event.key.keysym.sym == SDLK_RETURN)
                 {
                     textBuffer[cIndex] = '\n';
-                    //printf("%s\n", textBuffer);
                     cIndex++;
                 }
                 break;
+                
                 
                 case SDL_KEYUP:
                 char c = event.key.keysym.sym;
                 if(c >= ' ' && c <= '~')
                 {
                     textBuffer[cIndex] = c;
-                    //printf("%s\n", textBuffer);
                     cIndex++;
                 }
                 break;
             }
         }
         
-        ClearBuffer(&buffer, (Color){20, 20, 20});
+        ClearBuffer(&buffer, (Color){0, 0, 0, 0});
         
-        //DrawCircle(&buffer, 300, 300, 50, (Color){255, 0, 0});
-        //DrawRectRounded(&buffer, &rect, 20, (Color){255, 0, 0});
+        //Font Rendering
         {
-            u32 xStart = charRect.x;
-            u32 yStart = charRect.y;
-            u32 size = 30;
+            u32 cursorX = 0;
+            u32 baseline = ascent;
             
             u32 i = 0;
             char c = textBuffer[i];
             while(c != 0)
             {
+                int advance;
+                int lsb; //left side bearing
+                stbtt_GetCodepointHMetrics(&font, c, &advance, &lsb);
+                
                 if(c == '\n')
                 {
-                    charRect.y += size;
-                    charRect.x = xStart - size;
+                    baseline += ascent + 4;
+                    cursorX = -roundf(advance * scale);
                 }
                 if(c != ' ' && c != '\n')
                 {
-                    u32 xOffset, yOffset;
-                    bitmap = stbtt_GetCodepointBitmap(&font, 0, stbtt_ScaleForPixelHeight(&font, size), textBuffer[i], &charRect.width, &charRect.height, &xOffset, &yOffset);
-                    //charRect.y += yOffset;
-                    //charRect.x += xOffset;
-                    //DrawRectWire(&buffer, &charRect, (Color){255, 0, 0, 0});
+                    Rect charRect = {0};
+                    
+                    u8 *bitmap = stbtt_GetCodepointBitmap(&font, 0, scale, c, &charRect.width, &charRect.height, 0, 0);
+                    
+                    i32 c_x1, c_y1, c_x2, c_y2;
+                    stbtt_GetCodepointBitmapBox(&font, c, scale, scale, &c_x1, &c_y1, &c_x2, &c_y2);
+                    
+                    charRect.x = cursorX + c_x1;
+                    charRect.y = baseline + c_y1;
+                    
                     RenderFontBitMap(&buffer, bitmap, &charRect);
                     free(bitmap);
                 }
-                charRect.x += size / 2;
+                
+                cursorX += roundf(advance * scale);
+                
+                if(textBuffer[i + 1])
+                {
+                    i32 kern = stbtt_GetCodepointKernAdvance(&font, textBuffer[i], textBuffer[i + 1]);
+                    cursorX += roundf(kern * scale);
+                }
+                
                 i++;
                 c = textBuffer[i];
             }
-            
-            charRect.width = size / 3;
-            charRect.height = size;
-            DrawRect(&buffer, &charRect, (Color){0, 255, 0});
-            
-            charRect.x = xStart;
-            charRect.y = yStart;
         }
         
         SDL_UpdateTexture(texture, NULL, buffer.data, 4 * buffer.width);
@@ -157,7 +166,6 @@ int main(int argc, char *argv[])
     
     SDL_DestroyTexture(texture);
     free(buffer.data);
-    free(bitmap);
     buffer.data = NULL;
     
     return 0;
