@@ -7,7 +7,7 @@ void ClearBuffer(Buffer *buffer, Color color)
         u32 n = 0;
         for(n = 0; n < buffer->height * buffer->width; n++)
         {
-            buffer->data[n] = (color.r << 32) | (color.g << 16) | (color.b << 8) | (color.a << 0);
+            buffer->data[n] = (color.r << 32) | (color.g << 8) | (color.b << 16) | (color.a << 0);
         }
     }
 }
@@ -22,7 +22,7 @@ void DrawRect(Buffer *buffer, Rect *rect, Color color)
             {
                 if(x >= 0 && y >= 0 && x < buffer->width && y < buffer->height)
                 {
-                    buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 16) | (color.b << 8) | (color.a << 0);
+                    buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 8) | (color.b << 16) | (color.a << 0);
                 }
             }
         }
@@ -41,7 +41,7 @@ void DrawRectWire(Buffer *buffer, Rect *rect, Color color)
                 {
                     if(x == rect->x || y == rect->y || x == rect->x + rect->width - 1 || y == rect->y + rect->height - 1)
                     {
-                        buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 16) | (color.b << 8) | (color.a << 0);
+                        buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 8) | (color.b << 16) | (color.a << 0);
                     }
                 }
             }
@@ -63,7 +63,7 @@ void DrawCircle(Buffer *buffer, i32 xPos, i32 yPos, u32 radius, Color color)
                 {
                     if(distSqrt <= (radius * radius))
                     {
-                        buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 16) | (color.b << 8) | (color.a << 0);
+                        buffer->data[x + y * buffer->width] = (color.r << 32) | (color.g << 8) | (color.b << 16) | (color.a << 0);
                     }
                 }
             }
@@ -107,7 +107,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                     u32 bX = x - rect->x;
                     u32 bY = y - rect->y;
                     u8 alpha = bitMap[bX + bY * rect->width];
-                    if(alpha != 0)
+                    if(alpha <= 255 && alpha >= 50)
                     {
                         buffer->data[x + y * buffer->width] = (alpha << 32) | (alpha << 16) | (alpha << 8) | (alpha << 0);
                     }

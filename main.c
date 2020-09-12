@@ -54,10 +54,10 @@ int main(int argc, char *argv[])
     buffer.width = SCREEN_WIDTH;
     buffer.height = SCREEN_HEIGHT;
     
-    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, SCREEN_WIDTH, SCREEN_HEIGHT);
+    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
     
     stbtt_fontinfo font;
-    FILE *fontFile = fopen("C:/Windows/Fonts/JetBrainsMono-Regular.ttf", "rb");
+    FILE *fontFile = fopen("C:/Windows/Fonts/consola.ttf", "rb");
     if(fontFile != NULL)
     {
         fread(ttf_buffer, 1, 1 << 25, fontFile);
@@ -65,14 +65,19 @@ int main(int argc, char *argv[])
         fclose(fontFile);
     }
     
-    u32 size = 22;
+    u32 size = 23;
     f32 scale = stbtt_ScaleForPixelHeight(&font, size);
     
     int ascent, descent, lineGap;
     stbtt_GetFontVMetrics(&font, &ascent, &descent, &lineGap);
     ascent = roundf(ascent * scale);
+    descent = roundf(descent * scale);
+    
+    Rect caret = {0, 0, 10, ascent + descent + 8};
+    Rect lineHighlight = {0, 0, SCREEN_WIDTH, 0};
     
     b32 quit = false;
+    SDL_StartTextInput();
     while(!quit)
     {
         while(SDL_PollEvent(&event) != 0)
@@ -83,33 +88,41 @@ int main(int argc, char *argv[])
                 quit = true;
                 continue;
                 break;
-                
                 case SDL_KEYDOWN:
                 if(event.key.keysym.sym == SDLK_BACKSPACE)
                 {
-                    cIndex--;
-                    textBuffer[cIndex] = 0;
+                    if(cIndex > 0)
+                    {
+                        cIndex--;
+                        textBuffer[cIndex] = 0;
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_RETURN)
                 {
                     textBuffer[cIndex] = '\n';
                     cIndex++;
                 }
-                break;
-                
-                
-                case SDL_KEYUP:
-                char c = event.key.keysym.sym;
-                if(c >= ' ' && c <= '~')
+                else if(event.key.keysym.sym == SDLK_TAB)
                 {
-                    textBuffer[cIndex] = c;
+                    textBuffer[cIndex] = '\t';
                     cIndex++;
                 }
+                break;
+                
+                case SDL_TEXTINPUT:
+                strcat(textBuffer, event.text.text);
+                cIndex++;
+                printf("cindex : %d\n", cIndex);
                 break;
             }
         }
         
         ClearBuffer(&buffer, (Color){0, 0, 0, 0});
+        
+        lineHighlight.y = caret.y;
+        lineHighlight.height = caret.height;
+        DrawRect(&buffer, &lineHighlight, (Color){40, 40, 40, 0});
+        DrawRect(&buffer, &caret, (Color){255, 255, 0, 0});
         
         //Font Rendering
         {
@@ -129,7 +142,11 @@ int main(int argc, char *argv[])
                     baseline += ascent + 4;
                     cursorX = -roundf(advance * scale);
                 }
-                if(c != ' ' && c != '\n')
+                if(c == '\t')
+                {
+                    cursorX += 4 * roundf(advance * scale);
+                }
+                if(c >= '!' && c <= '~')
                 {
                     Rect charRect = {0};
                     
@@ -146,6 +163,10 @@ int main(int argc, char *argv[])
                 }
                 
                 cursorX += roundf(advance * scale);
+                
+                caret.x = cursorX;
+                caret.y = baseline - ascent;
+                caret.width = roundf(advance * scale);
                 
                 if(textBuffer[i + 1])
                 {
