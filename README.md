@@ -1,0 +1,1 @@
+A small text editor written in C
