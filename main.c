@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <SDL2/SDL.h>
 
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "stb_truetype.h"
 #include "types.h"
+#include "font.c"
 #include "render.c"
 
 #define SCREEN_WIDTH 1280
@@ -15,10 +17,126 @@ global SDL_Event event;
 
 global Buffer buffer;
 
-global char textBuffer[1024];
-global u32 cIndex = 0;
+#define MAX_ASCII_CHAR 94 //from ('!') = 33 to ('~') = 126
+global FontBitMap fontBitMaps[MAX_ASCII_CHAR];
 
-char ttf_buffer[1 << 25];
+#define TEXT_BUFFER_SIZE 500
+u8 *textOriginalBuffer = NULL;
+
+typedef struct TextSequence
+{
+    u8 *buffer;
+    i32 preEndIndex;
+    i32 postStartIndex;
+    u32 gapSize;
+    
+} TextSequence;
+
+global TextSequence textSeq;
+
+void InsertItem(TextSequence *tSeq, u8 item)
+{
+    if(tSeq->gapSize > 0)
+    {
+        tSeq->buffer[++tSeq->preEndIndex] = item;
+        tSeq->gapSize--;
+        //printf("pre : %d, post : %d, gap : %d\n", tSeq->preEndIndex, tSeq->postStartIndex, tSeq->gapSize);
+    }
+    else
+    {
+        //resize text buffer to create new gap
+    }
+}
+
+void DeleteItem(TextSequence *tSeq)
+{
+    if(tSeq->preEndIndex > -1)
+    {
+        tSeq->preEndIndex--;
+        tSeq->gapSize++;
+        //printf("pre : %d, post : %d, gap : %d\n", tSeq->preEndIndex, tSeq->postStartIndex, tSeq->gapSize);
+    }
+}
+
+void MoveLeft(TextSequence *tSeq)
+{
+    if(tSeq->preEndIndex > -1)
+    {
+        tSeq->buffer[--tSeq->postStartIndex] = tSeq->buffer[tSeq->preEndIndex--];
+        //printf("pre : %d, post : %d, gap : %d\n", tSeq->preEndIndex, tSeq->postStartIndex, tSeq->gapSize);
+    }
+}
+
+void MoveRight(TextSequence *tSeq)
+{
+    if(tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    {
+        tSeq->buffer[++tSeq->preEndIndex] = tSeq->buffer[tSeq->postStartIndex++];
+        //printf("pre : %d, post : %d, gap : %d\n", tSeq->preEndIndex, tSeq->postStartIndex, tSeq->gapSize);
+    }
+}
+
+void MoveUp(TextSequence *tSeq)
+{
+    u32 currentLineCharCount = 0;
+    
+    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
+    {
+        MoveLeft(tSeq);
+        currentLineCharCount++;
+    }
+    //printf("c : %d\n", currentLineCharCount);
+    MoveLeft(tSeq);
+    
+    u32 upperLineCharCount = 0;
+    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
+    {
+        MoveLeft(tSeq);
+        upperLineCharCount++;
+    }
+    //printf("c : %d\n", upperLineCharCount);
+    
+    if(upperLineCharCount >= currentLineCharCount)
+    {
+        for(u32 n = 0; n < currentLineCharCount; n++)
+        {
+            MoveRight(tSeq);
+        }
+    }
+    else
+    {
+        for(u32 n = 0; n < upperLineCharCount; n++)
+        {
+            MoveRight(tSeq);
+        }
+    }
+}
+
+void MoveDown(TextSequence *tSeq)
+{
+    u32 currentLineCharCount = 0;
+    
+    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
+    {
+        MoveLeft(tSeq);
+        currentLineCharCount++;
+    }
+    //printf("c : %d\n", currentLineCharCount);
+    
+    while(tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    {
+        MoveRight(tSeq);
+    }
+    
+    MoveRight(tSeq);
+    
+    u32 n = 0;
+    while(n < currentLineCharCount && tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    {
+        MoveRight(tSeq);
+        n++;
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -29,52 +147,54 @@ int main(int argc, char *argv[])
     }
     
     window = SDL_CreateWindow("SmallEd",
-							  SDL_WINDOWPOS_CENTERED,
-							  SDL_WINDOWPOS_CENTERED,
-							  SCREEN_WIDTH,
-							  SCREEN_HEIGHT,
-                              0);
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SCREEN_WIDTH,
+                              SCREEN_HEIGHT,
+                              SDL_WINDOW_ALLOW_HIGHDPI);
+    
     if (window == NULL)
     {
         SDL_Log("Failed to create SDL window : %s\n", SDL_GetError());
-        //return 1;
+        return 1;
     }
     
-    //using software rendering
     renderer = SDL_CreateRenderer(window, 3, SDL_RENDERER_ACCELERATED);
     
     if (renderer == NULL)
     {
         SDL_Log("Failed to create SDL renderer : %s\n", SDL_GetError());
-        //return 1;
+        return 1;
     }
     
-    //allocating memory for buffer
-    buffer.data = malloc(sizeof(u32) * SCREEN_WIDTH * SCREEN_HEIGHT);
-    buffer.width = SCREEN_WIDTH;
-    buffer.height = SCREEN_HEIGHT;
+    //allocating memory for render buffer
+    {
+        buffer.data = malloc(sizeof(u32) * SCREEN_WIDTH * SCREEN_HEIGHT);
+        buffer.width = SCREEN_WIDTH;
+        buffer.height = SCREEN_HEIGHT;
+    }
     
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
     
-    stbtt_fontinfo font;
-    FILE *fontFile = fopen("C:/Windows/Fonts/consola.ttf", "rb");
-    if(fontFile != NULL)
+    FontData fontData = LoadFont("C:/Windows/Fonts/consola.ttf", 22);
+    
+    //font bitmaps loading
     {
-        fread(ttf_buffer, 1, 1 << 25, fontFile);
-        stbtt_InitFont(&font, ttf_buffer, stbtt_GetFontOffsetForIndex(ttf_buffer, 0));
-        fclose(fontFile);
+        for(u8 n = 33; n < 127; n++)
+        {
+            //Bitmap Rasterizing
+            fontBitMaps[n - 33].bitMap = stbtt_GetCodepointBitmap(&fontData.fontInfo, 0, fontData.scale, n, &fontBitMaps[n - 33].width, &fontBitMaps[n - 33].height, &fontBitMaps[n - 33].xOffset, &fontBitMaps[n - 33].yOffset);
+        }
     }
     
-    u32 size = 23;
-    f32 scale = stbtt_ScaleForPixelHeight(&font, size);
+    Rect caret = {0, 0, 10, fontData.lineGap + fontData.ascent - fontData.descent};
+    Rect lineHighlight = {0, 0, SCREEN_WIDTH, caret.height};
     
-    int ascent, descent, lineGap;
-    stbtt_GetFontVMetrics(&font, &ascent, &descent, &lineGap);
-    ascent = roundf(ascent * scale);
-    descent = roundf(descent * scale);
-    
-    Rect caret = {0, 0, 10, ascent + descent + 8};
-    Rect lineHighlight = {0, 0, SCREEN_WIDTH, 0};
+    textSeq.buffer = malloc(TEXT_BUFFER_SIZE);
+    memset(&textSeq.buffer[0], 0, TEXT_BUFFER_SIZE);
+    textSeq.gapSize = TEXT_BUFFER_SIZE;
+    textSeq.preEndIndex = -1;
+    textSeq.postStartIndex = TEXT_BUFFER_SIZE;
     
     b32 quit = false;
     SDL_StartTextInput();
@@ -86,98 +206,94 @@ int main(int argc, char *argv[])
             {
                 case SDL_QUIT:
                 quit = true;
-                continue;
                 break;
+                
                 case SDL_KEYDOWN:
                 if(event.key.keysym.sym == SDLK_BACKSPACE)
                 {
-                    if(cIndex > 0)
-                    {
-                        cIndex--;
-                        textBuffer[cIndex] = 0;
-                    }
+                    DeleteItem(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_RETURN)
                 {
-                    textBuffer[cIndex] = '\n';
-                    cIndex++;
+                    InsertItem(&textSeq, '\n');
                 }
                 else if(event.key.keysym.sym == SDLK_TAB)
                 {
-                    textBuffer[cIndex] = '\t';
-                    cIndex++;
+                    InsertItem(&textSeq, '\t');
+                }
+                else if(event.key.keysym.sym == SDLK_LEFT)
+                {
+                    MoveLeft(&textSeq);
+                }
+                else if(event.key.keysym.sym == SDLK_RIGHT)
+                {
+                    MoveRight(&textSeq);
+                }
+                else if(event.key.keysym.sym == SDLK_UP)
+                {
+                    MoveUp(&textSeq);
+                }
+                else if(event.key.keysym.sym == SDLK_DOWN)
+                {
+                    MoveDown(&textSeq);
                 }
                 break;
                 
                 case SDL_TEXTINPUT:
-                strcat(textBuffer, event.text.text);
-                cIndex++;
-                printf("cindex : %d\n", cIndex);
+                InsertItem(&textSeq, event.text.text[0]);
+                //printf("%c\n", event.text.text[0]);
                 break;
             }
         }
         
         ClearBuffer(&buffer, (Color){0, 0, 0, 0});
         
-        lineHighlight.y = caret.y;
-        lineHighlight.height = caret.height;
-        DrawRect(&buffer, &lineHighlight, (Color){40, 40, 40, 0});
-        DrawRect(&buffer, &caret, (Color){255, 255, 0, 0});
-        
-        //Font Rendering
+        //calculating caret position
         {
-            u32 cursorX = 0;
-            u32 baseline = ascent;
+            caret.x = 0;
+            caret.y = 0;
             
-            u32 i = 0;
-            char c = textBuffer[i];
-            while(c != 0)
+            for(u32 n = 0; n < textSeq.preEndIndex + 1; n++)
             {
-                int advance;
-                int lsb; //left side bearing
-                stbtt_GetCodepointHMetrics(&font, c, &advance, &lsb);
-                
-                if(c == '\n')
+                if(textSeq.buffer[n] == '\n')
                 {
-                    baseline += ascent + 4;
-                    cursorX = -roundf(advance * scale);
+                    caret.y += caret.height;
+                    caret.x = 0;
                 }
-                if(c == '\t')
+                else if(textSeq.buffer[n] == '\t')
                 {
-                    cursorX += 4 * roundf(advance * scale);
+                    i32 advance, lsb;
+                    stbtt_GetCodepointHMetrics(&fontData.fontInfo, ' ', &advance, &lsb);
+                    caret.x += 4 * roundf(advance * fontData.scale);
                 }
-                if(c >= '!' && c <= '~')
+                else
                 {
-                    Rect charRect = {0};
-                    
-                    u8 *bitmap = stbtt_GetCodepointBitmap(&font, 0, scale, c, &charRect.width, &charRect.height, 0, 0);
-                    
-                    i32 c_x1, c_y1, c_x2, c_y2;
-                    stbtt_GetCodepointBitmapBox(&font, c, scale, scale, &c_x1, &c_y1, &c_x2, &c_y2);
-                    
-                    charRect.x = cursorX + c_x1;
-                    charRect.y = baseline + c_y1;
-                    
-                    RenderFontBitMap(&buffer, bitmap, &charRect);
-                    free(bitmap);
+                    i32 advance, lsb;
+                    stbtt_GetCodepointHMetrics(&fontData.fontInfo, textSeq.buffer[n], &advance, &lsb);
+                    caret.x += roundf(advance * fontData.scale);
+                    caret.width = roundf(advance * fontData.scale);
                 }
-                
-                cursorX += roundf(advance * scale);
-                
-                caret.x = cursorX;
-                caret.y = baseline - ascent;
-                caret.width = roundf(advance * scale);
-                
-                if(textBuffer[i + 1])
-                {
-                    i32 kern = stbtt_GetCodepointKernAdvance(&font, textBuffer[i], textBuffer[i + 1]);
-                    cursorX += roundf(kern * scale);
-                }
-                
-                i++;
-                c = textBuffer[i];
             }
         }
+        lineHighlight.y = caret.y;
+        
+        DrawRect(&buffer, &lineHighlight, (Color){50, 50, 50, 0});
+        DrawRect(&buffer, &caret, (Color){255, 255, 0, 0});
+        
+        //creating new buffer combining pre and post span
+        
+        //NOTE(abhicv) : not sure why its not working
+        //textOriginalBuffer = (u8*)malloc(textSeq.preEndIndex + 1 + TEXT_BUFFER_SIZE - textSeq.postStartIndex);
+        //memset(&textOriginalBuffer[0], 0, textSeq.preEndIndex + 1 + TEXT_BUFFER_SIZE - textSeq.postStartIndex);
+        
+        textOriginalBuffer = (u8*)malloc(TEXT_BUFFER_SIZE);
+        memset(&textOriginalBuffer[0], 0, TEXT_BUFFER_SIZE);
+        
+        memcpy(&textOriginalBuffer[0], &textSeq.buffer[0], textSeq.preEndIndex + 1);
+        memcpy(&textOriginalBuffer[textSeq.preEndIndex + 1], &textSeq.buffer[textSeq.postStartIndex], TEXT_BUFFER_SIZE - textSeq.postStartIndex);
+        
+        RenderTextBuffer(&buffer, &textOriginalBuffer[0], &fontData, fontBitMaps, 0, 0, 0);
+        free(textOriginalBuffer);
         
         SDL_UpdateTexture(texture, NULL, buffer.data, 4 * buffer.width);
         SDL_RenderClear(renderer);

@@ -93,26 +93,3 @@ void DrawRectRounded(Buffer *buffer, Rect *rect, u32 roundness, Color color)
     DrawCircle(buffer, rect->x + roundness, rect->y + rect->height - roundness, roundness, color);
     DrawCircle(buffer, rect->x + rect->width - roundness, rect->y + rect->height - roundness, roundness, color);
 }
-
-void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
-{
-    if(buffer != NULL && bitMap != NULL)
-    {
-        for(u32 y = rect->y; y < (rect->y + rect->height); y++)
-        {
-            for(u32 x = rect->x; x < (rect->x + rect->width); x++)
-            {
-                if(x >= 0 && y >= 0 && x < buffer->width && y < buffer->height)
-                {
-                    u32 bX = x - rect->x;
-                    u32 bY = y - rect->y;
-                    u8 alpha = bitMap[bX + bY * rect->width];
-                    if(alpha <= 255 && alpha >= 50)
-                    {
-                        buffer->data[x + y * buffer->width] = (alpha << 32) | (alpha << 16) | (alpha << 8) | (alpha << 0);
-                    }
-                }
-            }
-        }
-    }
-}
