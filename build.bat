@@ -5,6 +5,6 @@ set sdl2_inlcude= /ISDL2\include\
 
 if exist main.exe del main.exe
 
-cl /Zi /nologo main.c %sdl2_inlcude% /link /subsystem:console /libpath:SDL2\lib\x64 %lflags%
+cl /nologo main.c %sdl2_inlcude% /link /subsystem:windows /libpath:SDL2\lib\x64 %lflags%
 
 if exist main.exe main.exe

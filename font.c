@@ -11,7 +11,7 @@ FontData LoadFont(const char *fontFile, u32 size)
         u32 size = ftell(fontFileHandle); 
         fseek(fontFileHandle, 0, SEEK_SET);
         
-        u8 *fontBuffer = malloc(size);
+        u8 *fontBuffer = (u8*)malloc(size);
         fread(fontBuffer, 1, size, fontFileHandle);
         
         stbtt_InitFont(&fontInfo, fontBuffer, stbtt_GetFontOffsetForIndex(fontBuffer, 0));
@@ -19,7 +19,7 @@ FontData LoadFont(const char *fontFile, u32 size)
         fclose(fontFileHandle);
     }
     
-    int ascent, descent, lineGap;
+    i32 ascent, descent, lineGap;
     stbtt_GetFontVMetrics(&fontInfo, &ascent, &descent, &lineGap);
     f32 scale = stbtt_ScaleForPixelHeight(&fontInfo, size);
     
@@ -32,6 +32,27 @@ FontData LoadFont(const char *fontFile, u32 size)
     fontData.lineGap = roundf(lineGap * scale);
     
     return fontData;
+}
+
+Color BlendPixel(Color dst, Color src, Color color) 
+{
+    src.a = (src.a * color.a) >> 8;
+    int ia = 0xff - src.a;
+    dst.r = ((src.r * color.r * src.a) >> 16) + ((dst.r * ia) >> 8);
+    dst.g = ((src.g * color.g * src.a) >> 16) + ((dst.g * ia) >> 8);
+    dst.b = ((src.b * color.b * src.a) >> 16) + ((dst.b * ia) >> 8);
+    return dst;
+}
+
+Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
+{
+    Color color = {0};
+    color.r = (buffer->data[x + y * buffer->width] & 0xFF000000) >> 24;
+    color.g = (buffer->data[x + y * buffer->width] & 0x00FF0000) >> 16;
+    color.b = (buffer->data[x + y * buffer->width] & 0x0000FF00) >> 8;
+    color.a = (buffer->data[x + y * buffer->width] & 0x000000FF) >> 0;
+    
+    return color;
 }
 
 void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
@@ -48,13 +69,28 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                     u32 bY = y - rect->y;
                     u8 alpha = bitMap[bX + bY * rect->width];
                     
-                    if(alpha > 50)
+                    //if(alpha > 0)
                     {
+#if 0
                         buffer->data[x + y * buffer->width] = 
-                            (alpha << 32) | 
+                            (alpha << 24) | 
                             (alpha << 16) | 
                             (alpha << 8) | 
-                            (alpha << 0);
+                            (alpha  << 0);
+#endif
+                        
+#if 1
+                        Color dst = GetBufferPixelColor(buffer, x, y);
+                        Color src = {alpha, alpha, alpha, alpha};
+                        Color c = {255, 255, 255, 255};
+                        Color blendColor = BlendPixel(dst, src, c);
+                        
+                        buffer->data[x + y * buffer->width] = 
+                            (blendColor.r << 24) | 
+                            (blendColor.g << 16) | 
+                            (blendColor.b << 8) | 
+                            (blendColor.a  << 0);
+#endif 
                     }
                 }
             }
@@ -66,14 +102,13 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
                       u32 xPos, u32 yPos,  u32 startIndex)
 {
     u32 cursorX = xPos;
-    u32 baseline = yPos + fontData->lineGap + fontData->ascent;
+    u32 baseline = yPos + fontData->ascent + fontData->lineGap;
     
     u32 i = startIndex;
     char c = textBuffer[i];
     while(c != 0)
     {
-        i32 advance;
-        i32 lsb;
+        i32 advance = 0, lsb = 0;
         stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
         
         if(c == '\n')
@@ -98,6 +133,7 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             glyphRect.height = fontBitMaps[c - 33].height;
             
             RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            
             cursorX += roundf(advance * fontData->scale);
             
             if(textBuffer[i + 1])
