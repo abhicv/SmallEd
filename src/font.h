@@ -28,8 +28,4 @@ typedef struct FontBitMap
     
 } FontBitMap;
 
-FontData LoadFont(const char *fontFile, u32 size);
-void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect);
-void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, 
-                      u32 xPos, u32 yPos,  u32 startIndex);
 #endif //FONT_H

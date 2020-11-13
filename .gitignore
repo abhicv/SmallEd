@@ -1,5 +1,6 @@
-*.obj
-*.exe
-*.ilk
-*.pdb
-*.sln
+bin/*.obj
+bin/*.exe
+bin/*.ilk
+bin/*.pdb
+bin/*.sln
+.gitignore

@@ -8,13 +8,14 @@ void ClearBuffer(Buffer *buffer, Color color)
         for(n = 0; n < buffer->height * buffer->width; n++)
         {
             buffer->data[n] = (color.r << 24) 
-                | (color.g << 16) 
+                | (color.g << 16)
                 | (color.b << 8) 
                 | (color.a << 0);
         }
     }
 }
 
+//TODO(abhicv): rect clipping
 void DrawRect(Buffer *buffer, Rect *rect, Color color)
 {
     if(buffer != NULL)

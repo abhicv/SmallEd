@@ -9,7 +9,7 @@ void InsertItem(TextSequence *tSeq, u8 item)
     }
     else
     {
-        //resize text buffer to create new gap
+        //TODO(abhicv): resize text buffer to create new gap
     }
 }
 

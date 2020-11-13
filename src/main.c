@@ -7,6 +7,7 @@
 #include "types.h"
 #include "font.c"
 #include "text.c"
+#include "file.c"
 #include "render.c"
 
 #define SCREEN_WIDTH 1280
@@ -19,11 +20,23 @@ global SDL_Event event;
 global Buffer buffer;
 
 //NOTE(abhicv) : from ('!') = 33 to ('~') = 126
-#define MAX_ASCII_CHAR 94 
+#define MAX_ASCII_CHAR 94
 global FontBitMap fontBitMaps[MAX_ASCII_CHAR];
 
 global TextSequence textSeq;
 u8 *textOriginalBuffer = NULL;
+
+typedef struct EditContext
+{
+    u32 editPanelId;
+    u32 currentLineNumber;
+    TextSequence textSeq;
+    u8 *originalTextSeq;
+    
+} EditContext;
+
+u32 currentLineNumber = 0;
+u32 numOfLines = 0;
 
 int main(int argc, char *argv[])
 {
@@ -38,7 +51,7 @@ int main(int argc, char *argv[])
                               SDL_WINDOWPOS_UNDEFINED,
                               SCREEN_WIDTH,
                               SCREEN_HEIGHT,
-                              SDL_WINDOW_ALLOW_HIGHDPI);
+                              0);
     
     if(window == NULL)
     {
@@ -63,7 +76,7 @@ int main(int argc, char *argv[])
     
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR32, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
     
-    FontData fontData = LoadFont("JetBrainsMono-Regular.ttf", 24);
+    FontData fontData = LoadFont("font/Inconsolata.ttf", 25);
     
     //NOTE(abhicv): font bitmaps loading
     {
@@ -71,12 +84,6 @@ int main(int argc, char *argv[])
         {
             //Bitmap Rasterizing
             fontBitMaps[n - 33].bitMap = stbtt_GetCodepointBitmap(&fontData.fontInfo, 0, fontData.scale, n, &fontBitMaps[n - 33].width, &fontBitMaps[n - 33].height, &fontBitMaps[n - 33].xOffset, &fontBitMaps[n - 33].yOffset);
-#if 0
-            int x0, x1, y0, y1;
-            stbtt_GetCodepointBitmapBox(&fontData.fontInfo, n, 0, fontData.scale, &x0, &y0, &x1, &y1);
-            fontBitMaps[n - 33].xOffset = x0;
-            fontBitMaps[n - 33].yOffset = y0;
-#endif
         }
     }
     
@@ -84,15 +91,38 @@ int main(int argc, char *argv[])
     Rect lineHighlight = {0, 0, SCREEN_WIDTH, caret.height};
     
     Rect lineMargin = {0, 0, 0, SCREEN_HEIGHT};
-    i32 a, l;
+    i32 a = 0, l = 0;
     stbtt_GetCodepointHMetrics(&fontData.fontInfo, '0', &a, &l);
     lineMargin.width = 3 * roundf(a * fontData.scale) + 5;
     
     textSeq.buffer = malloc(TEXT_BUFFER_SIZE);
     memset(&textSeq.buffer[0], 0, TEXT_BUFFER_SIZE);
-    textSeq.gapSize = TEXT_BUFFER_SIZE;
-    textSeq.preEndIndex = -1;
-    textSeq.postStartIndex = TEXT_BUFFER_SIZE;
+    
+    //reading a file
+    {
+        FILE *file = fopen("test_file.c", "r");
+        fseek(file, 0, SEEK_END);
+        u32 size = ftell(file);
+        fseek(file, 0, SEEK_SET);
+        fread(&textSeq.buffer[TEXT_BUFFER_SIZE - size], 1, size, file);
+        fclose(file);
+        
+        textSeq.gapSize = TEXT_BUFFER_SIZE;
+        textSeq.preEndIndex = -1;
+        textSeq.postStartIndex = TEXT_BUFFER_SIZE - size;
+        textSeq.bufferSize = TEXT_BUFFER_SIZE;
+    }
+    
+    //counting total num of lines in text buffer
+    {
+        for(u32 i = textSeq.postStartIndex; i < TEXT_BUFFER_SIZE; i++)
+        {
+            if(textSeq.buffer[i] == '\n')
+            {
+                numOfLines++;
+            }
+        }
+    }
     
     b32 quit = false;
     SDL_StartTextInput();
@@ -109,6 +139,10 @@ int main(int argc, char *argv[])
                 case SDL_KEYDOWN:
                 if(event.key.keysym.sym == SDLK_BACKSPACE)
                 {
+                    if(textSeq.buffer[textSeq.preEndIndex] == '\n' && numOfLines > 0)
+                    {
+                        numOfLines--;
+                    }
                     DeleteItem(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_ESCAPE)
@@ -118,6 +152,7 @@ int main(int argc, char *argv[])
                 else if(event.key.keysym.sym == SDLK_RETURN)
                 {
                     InsertItem(&textSeq, '\n');
+                    numOfLines++;
                 }
                 else if(event.key.keysym.sym == SDLK_TAB)
                 {
@@ -143,12 +178,11 @@ int main(int argc, char *argv[])
                 
                 case SDL_TEXTINPUT:
                 InsertItem(&textSeq, event.text.text[0]);
-                //printf("%c\n", event.text.text[0]);
                 break;
             }
         }
         
-        ClearBuffer(&buffer, (Color){10, 10, 10, 0});
+        ClearBuffer(&buffer, (Color){0, 0, 0, 0});
         
         //NOTE(abhicv): calculating caret position
         {
@@ -173,41 +207,43 @@ int main(int argc, char *argv[])
                     i32 advance, lsb;
                     stbtt_GetCodepointHMetrics(&fontData.fontInfo, textSeq.buffer[n], &advance, &lsb);
                     caret.x += roundf(advance * fontData.scale);
-                    //caret.width = roundf(advance * fontData.scale);
+                    caret.width = roundf(advance * fontData.scale);
                 }
             }
-            
             lineHighlight.y = caret.y;
         }
         
-        //RENDERING
+        //Rendering
         {
-            DrawRect(&buffer, &lineHighlight, (Color){60, 60, 60, 255});
+            DrawRectWire(&buffer, &lineHighlight, (Color){0, 0, 255, 255});
             DrawRect(&buffer, &lineMargin, (Color){20, 20, 20, 255});
             
             //NOTE(abhicv): line numbers
             {
                 u32 p = lineMargin.y;
-                for(u32 n = 0; n <= 27; n++)
+                for(u32 n = 1; n <= numOfLines; n++)
                 {
-                    char number[3] = {0};
+                    char number[3] = {0, 0, 0};
                     sprintf(&number[0], "%d\0", n);
-                    RenderTextBuffer(&buffer, &number[0], &fontData, fontBitMaps, lineMargin.x + 3, p, 0);
+                    RenderTextBuffer(&buffer, &number[0], &fontData, fontBitMaps, lineMargin.x + 4, p, 0, 2);
                     p += fontData.lineGap + fontData.ascent - fontData.descent;
                 }
             }
             
-            //NOTE(abhicv): creating new buffer combining pre and post span
+            //NOTE(abhicv): creating new buffer combining pre and post span buffers
             {
-                u32 size = textSeq.preEndIndex + 1 + TEXT_BUFFER_SIZE - textSeq.postStartIndex + 1; 
+                u32 size = (textSeq.preEndIndex + 1) + (TEXT_BUFFER_SIZE - textSeq.postStartIndex) + 1;
                 textOriginalBuffer = (u8*)malloc(size);
                 
-                memset(&textOriginalBuffer[0], 0, size);
-                memcpy(&textOriginalBuffer[0], &textSeq.buffer[0], textSeq.preEndIndex + 1);
-                memcpy(&textOriginalBuffer[textSeq.preEndIndex + 1], &textSeq.buffer[textSeq.postStartIndex], TEXT_BUFFER_SIZE - textSeq.postStartIndex);
-                
-                RenderTextBuffer(&buffer, &textOriginalBuffer[0], &fontData, fontBitMaps, lineMargin.width, 0, 0);
-                free(textOriginalBuffer);
+                if(textOriginalBuffer != NULL)
+                {
+                    memset(&textOriginalBuffer[0], 0, size);
+                    memcpy(&textOriginalBuffer[0], &textSeq.buffer[0], textSeq.preEndIndex + 1);
+                    memcpy(&textOriginalBuffer[textSeq.preEndIndex + 1], &textSeq.buffer[textSeq.postStartIndex], TEXT_BUFFER_SIZE - textSeq.postStartIndex);
+                    
+                    RenderTextBuffer(&buffer, &textOriginalBuffer[0], &fontData, fontBitMaps, lineMargin.width, 0, 0, size - 1);
+                    free(textOriginalBuffer);
+                }
             }
             
             DrawRect(&buffer, &caret, (Color){255, 255, 0, 255});

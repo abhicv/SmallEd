@@ -38,9 +38,20 @@ Color BlendPixel(Color dst, Color src, Color color)
 {
     src.a = (src.a * color.a) >> 8;
     int ia = 0xff - src.a;
+    
     dst.r = ((src.r * color.r * src.a) >> 16) + ((dst.r * ia) >> 8);
     dst.g = ((src.g * color.g * src.a) >> 16) + ((dst.g * ia) >> 8);
     dst.b = ((src.b * color.b * src.a) >> 16) + ((dst.b * ia) >> 8);
+    
+    return dst;
+}
+
+Color BlendPix(Color dst, Color src) 
+{
+    int ia = 0xff - src.a;
+    dst.r = ((src.r * src.a) + (dst.r * ia)) >> 8;
+    dst.g = ((src.g * src.a) + (dst.g * ia)) >> 8;
+    dst.b = ((src.b * src.a) + (dst.b * ia)) >> 8;
     return dst;
 }
 
@@ -71,7 +82,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                     
                     //if(alpha > 0)
                     {
-#if 0
+#if 1
                         buffer->data[x + y * buffer->width] = 
                             (alpha << 24) | 
                             (alpha << 16) | 
@@ -79,11 +90,11 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                             (alpha  << 0);
 #endif
                         
-#if 1
+#if 0
                         Color dst = GetBufferPixelColor(buffer, x, y);
                         Color src = {alpha, alpha, alpha, alpha};
                         Color c = {255, 255, 255, 255};
-                        Color blendColor = BlendPixel(dst, src, c);
+                        Color blendColor = BlendPix(dst, src);
                         
                         buffer->data[x + y * buffer->width] = 
                             (blendColor.r << 24) | 
@@ -98,29 +109,28 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
     }
 }
 
-void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps,
-                      u32 xPos, u32 yPos,  u32 startIndex)
+void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, u32 startIndex, u32 endIndex)
 {
     u32 cursorX = xPos;
     u32 baseline = yPos + fontData->ascent + fontData->lineGap;
     
-    u32 i = startIndex;
-    char c = textBuffer[i];
-    while(c != 0)
+    for(u32 i = startIndex; i <= endIndex; i++)
     {
+        char c = textBuffer[i];
+        
         i32 advance = 0, lsb = 0;
         stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
         
-        if(c == '\n')
+        if(c == '\n') //new line
         {
             baseline += fontData->lineGap + fontData->ascent - fontData->descent;
             cursorX = xPos;
         }
-        if(c == '\t')
+        if(c == '\t') //tab
         {
             cursorX += 4 * roundf(advance * fontData->scale);
         }
-        if(c == ' ')
+        if(c == ' ') //space
         {
             cursorX += roundf(advance * fontData->scale);
         }
@@ -142,8 +152,5 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
                 cursorX += roundf(kern * fontData->scale);
             }
         }
-        
-        i++;
-        c = textBuffer[i];
     }
 }
