@@ -35,8 +35,11 @@ typedef struct EditContext
     
 } EditContext;
 
-u32 currentLineNumber = 0;
+u32 currentActiveLineNumber = 1;
 u32 numOfLines = 0;
+
+u32 minVisibleLineNumber = 1;
+u32 maxLinesVisible = 0;
 
 int main(int argc, char *argv[])
 {
@@ -75,6 +78,10 @@ int main(int argc, char *argv[])
     }
     
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR32, SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+    if(texture == NULL)
+    {
+        printf("Failed to create SDL texture : %s\n", SDL_GetError());
+    }
     
     FontData fontData = LoadFont("font/Inconsolata.ttf", 25);
     
@@ -97,6 +104,8 @@ int main(int argc, char *argv[])
     
     textSeq.buffer = malloc(TEXT_BUFFER_SIZE);
     memset(&textSeq.buffer[0], 0, TEXT_BUFFER_SIZE);
+    
+    maxLinesVisible = 1 + SCREEN_HEIGHT / (fontData.lineGap + fontData.ascent - fontData.descent);
     
     //reading a file
     {
@@ -142,6 +151,11 @@ int main(int argc, char *argv[])
                     if(textSeq.buffer[textSeq.preEndIndex] == '\n' && numOfLines > 0)
                     {
                         numOfLines--;
+                        if(currentActiveLineNumber > 1)
+                        {
+                            currentActiveLineNumber--;
+                            printf("active line: %d\n", currentActiveLineNumber);
+                        }
                     }
                     DeleteItem(&textSeq);
                 }
@@ -153,6 +167,12 @@ int main(int argc, char *argv[])
                 {
                     InsertItem(&textSeq, '\n');
                     numOfLines++;
+                    
+                    if(currentActiveLineNumber < numOfLines)
+                    {
+                        currentActiveLineNumber++;
+                        printf("active line: %d\n", currentActiveLineNumber);
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_TAB)
                 {
@@ -160,19 +180,62 @@ int main(int argc, char *argv[])
                 }
                 else if(event.key.keysym.sym == SDLK_LEFT)
                 {
+                    if(textSeq.buffer[textSeq.preEndIndex] == '\n')
+                    {
+                        if(currentActiveLineNumber > 1)
+                        {
+                            currentActiveLineNumber--;
+                            if(currentActiveLineNumber < minVisibleLineNumber)
+                            {
+                                minVisibleLineNumber--;
+                            }
+                            printf("active line: %d\n", currentActiveLineNumber);
+                        }
+                    }
                     MoveLeft(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_RIGHT)
                 {
                     MoveRight(&textSeq);
+                    if(textSeq.buffer[textSeq.preEndIndex] == '\n')
+                    {
+                        if(currentActiveLineNumber < numOfLines)
+                        {
+                            currentActiveLineNumber++;
+                            if(currentActiveLineNumber > (minVisibleLineNumber + maxLinesVisible - 1))
+                            {
+                                minVisibleLineNumber++;
+                            }
+                            printf("active line: %d\n", currentActiveLineNumber);
+                        }
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_UP)
                 {
                     MoveUp(&textSeq);
+                    
+                    if(currentActiveLineNumber > 1)
+                    {
+                        currentActiveLineNumber--;
+                        if(currentActiveLineNumber < minVisibleLineNumber)
+                        {
+                            minVisibleLineNumber--;
+                        }
+                    }
+                    printf("active line: %d\n", currentActiveLineNumber);
                 }
                 else if(event.key.keysym.sym == SDLK_DOWN)
                 {
                     MoveDown(&textSeq);
+                    if(currentActiveLineNumber < numOfLines)
+                    {
+                        currentActiveLineNumber++;
+                        if(currentActiveLineNumber > (minVisibleLineNumber + maxLinesVisible - 1))
+                        {
+                            minVisibleLineNumber++;
+                        }
+                    }
+                    printf("active line: %d\n", currentActiveLineNumber);
                 }
                 break;
                 
@@ -207,7 +270,7 @@ int main(int argc, char *argv[])
                     i32 advance, lsb;
                     stbtt_GetCodepointHMetrics(&fontData.fontInfo, textSeq.buffer[n], &advance, &lsb);
                     caret.x += roundf(advance * fontData.scale);
-                    caret.width = roundf(advance * fontData.scale);
+                    //caret.width = roundf(advance * fontData.scale);
                 }
             }
             lineHighlight.y = caret.y;
@@ -216,12 +279,12 @@ int main(int argc, char *argv[])
         //Rendering
         {
             DrawRectWire(&buffer, &lineHighlight, (Color){0, 0, 255, 255});
-            DrawRect(&buffer, &lineMargin, (Color){20, 20, 20, 255});
+            DrawRectWire(&buffer, &lineMargin, (Color){20, 20, 20, 255});
             
             //NOTE(abhicv): line numbers
             {
                 u32 p = lineMargin.y;
-                for(u32 n = 1; n <= numOfLines; n++)
+                for(u32 n = minVisibleLineNumber; n < minVisibleLineNumber + maxLinesVisible; n++)
                 {
                     char number[3] = {0, 0, 0};
                     sprintf(&number[0], "%d\0", n);
@@ -258,6 +321,7 @@ int main(int argc, char *argv[])
     SDL_DestroyTexture(texture);
     free(buffer.data);
     buffer.data = NULL;
+    SDL_Quit();
     
     return 0;
 }
