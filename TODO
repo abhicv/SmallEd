@@ -1,0 +1,11 @@
+- scrolling text edit area
+- loading, saving and creating files
+- directory listing and search
+- copy paste text sequences
+- undo system
+- vertical and horizontal split edit area
+- editor commmads and UI command list menu
+- keybindings for commands
+- config file parsing
+- theme file parsing
+- c program syntax highlighting

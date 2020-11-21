@@ -3,7 +3,6 @@
 FontData LoadFont(const char *fontFile, u32 size)
 {
     stbtt_fontinfo fontInfo = {0};
-    
     FILE *fontFileHandle = fopen(fontFile, "rb");
     if(fontFileHandle != NULL)
     {
@@ -18,11 +17,6 @@ FontData LoadFont(const char *fontFile, u32 size)
         
         fclose(fontFileHandle);
     }
-    
-    i32 ascent, descent, lineGap;
-    stbtt_GetFontVMetrics(&fontInfo, &ascent, &descent, &lineGap);
-    f32 scale = stbtt_ScaleForPixelHeight(&fontInfo, size);
-    
     FontData fontData = {0};
     fontData.fontInfo = fontInfo;
     fontData.size = size;

@@ -37,7 +37,7 @@ FontData LoadFont(const char *fontFile, u32 size)
 Color BlendPixel(Color dst, Color src, Color color) 
 {
     src.a = (src.a * color.a) >> 8;
-    int ia = 0xff - src.a;
+    i32 ia = 0xff - src.a;
     
     dst.r = ((src.r * color.r * src.a) >> 16) + ((dst.r * ia) >> 8);
     dst.g = ((src.g * color.g * src.a) >> 16) + ((dst.g * ia) >> 8);
@@ -49,15 +49,18 @@ Color BlendPixel(Color dst, Color src, Color color)
 Color BlendPix(Color dst, Color src) 
 {
     int ia = 0xff - src.a;
+    
     dst.r = ((src.r * src.a) + (dst.r * ia)) >> 8;
     dst.g = ((src.g * src.a) + (dst.g * ia)) >> 8;
     dst.b = ((src.b * src.a) + (dst.b * ia)) >> 8;
+    
     return dst;
 }
 
 Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
 {
     Color color = {0};
+    
     color.r = (buffer->data[x + y * buffer->width] & 0xFF000000) >> 24;
     color.g = (buffer->data[x + y * buffer->width] & 0x00FF0000) >> 16;
     color.b = (buffer->data[x + y * buffer->width] & 0x0000FF00) >> 8;
@@ -82,7 +85,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                     
                     //if(alpha > 0)
                     {
-#if 1
+#if 0
                         buffer->data[x + y * buffer->width] = 
                             (alpha << 24) | 
                             (alpha << 16) | 
@@ -90,11 +93,11 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
                             (alpha  << 0);
 #endif
                         
-#if 0
+#if 1
                         Color dst = GetBufferPixelColor(buffer, x, y);
                         Color src = {alpha, alpha, alpha, alpha};
                         Color c = {255, 255, 255, 255};
-                        Color blendColor = BlendPix(dst, src);
+                        Color blendColor = BlendPixel(dst, src, c);
                         
                         buffer->data[x + y * buffer->width] = 
                             (blendColor.r << 24) | 
