@@ -96,7 +96,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
 #if 1
                         Color dst = GetBufferPixelColor(buffer, x, y);
                         Color src = {alpha, alpha, alpha, alpha};
-                        Color c = {255, 255, 255, 255};
+                        Color c = {200, 200, 200, 255};
                         Color blendColor = BlendPixel(dst, src, c);
                         
                         buffer->data[x + y * buffer->width] = 
@@ -112,12 +112,101 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
     }
 }
 
-void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, u32 startIndex, u32 endIndex)
+void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, 
+                u32 startIndex, u32 endIndex)
 {
     u32 cursorX = xPos;
     u32 baseline = yPos + fontData->ascent + fontData->lineGap;
     
     for(u32 i = startIndex; i <= endIndex; i++)
+    {
+        char c = textBuffer[i];
+        
+        i32 advance = 0, lsb = 0;
+        stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
+        
+        if(c == '\n') //new line
+        {
+            baseline += fontData->lineGap + fontData->ascent - fontData->descent;
+            cursorX = xPos;
+        }
+        if(c == '\t') //tab
+        {
+            cursorX += 4 * roundf(advance * fontData->scale);
+        }
+        if(c == ' ') //space
+        {
+            cursorX += roundf(advance * fontData->scale);
+        }
+        if(c >= '!' && c <= '~')
+        {
+            Rect glyphRect = {0};
+            glyphRect.x = cursorX + fontBitMaps[c - 33].xOffset;
+            glyphRect.y = baseline + fontBitMaps[c - 33].yOffset;
+            glyphRect.width = fontBitMaps[c - 33].width;
+            glyphRect.height = fontBitMaps[c - 33].height;
+            
+            RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            
+            cursorX += roundf(advance * fontData->scale);
+            
+            if(textBuffer[i + 1])
+            {
+                i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, textBuffer[i], textBuffer[i + 1]);
+                cursorX += roundf(kern * fontData->scale);
+            }
+        }
+    }
+}
+
+void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, 
+                      i32 preEndIndex, i32 postStartIndex,
+                      u32 startIndex, u32 endIndex)
+{
+    u32 cursorX = xPos;
+    u32 baseline = yPos + fontData->ascent + fontData->lineGap;
+    
+    for(i32 i = startIndex; i <= preEndIndex; i++)
+    {
+        char c = textBuffer[i];
+        
+        i32 advance = 0, lsb = 0;
+        stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
+        
+        if(c == '\n') //new line
+        {
+            baseline += fontData->lineGap + fontData->ascent - fontData->descent;
+            cursorX = xPos;
+        }
+        if(c == '\t') //tab
+        {
+            cursorX += 4 * roundf(advance * fontData->scale);
+        }
+        if(c == ' ') //space
+        {
+            cursorX += roundf(advance * fontData->scale);
+        }
+        if(c >= '!' && c <= '~')
+        {
+            Rect glyphRect = {0};
+            glyphRect.x = cursorX + fontBitMaps[c - 33].xOffset;
+            glyphRect.y = baseline + fontBitMaps[c - 33].yOffset;
+            glyphRect.width = fontBitMaps[c - 33].width;
+            glyphRect.height = fontBitMaps[c - 33].height;
+            
+            RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            
+            cursorX += roundf(advance * fontData->scale);
+            
+            if(textBuffer[i + 1])
+            {
+                i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, textBuffer[i], textBuffer[i + 1]);
+                cursorX += roundf(kern * fontData->scale);
+            }
+        }
+    }
+    
+    for(i32 i = postStartIndex; i < endIndex; i++)
     {
         char c = textBuffer[i];
         

@@ -13,10 +13,6 @@
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
 
-global SDL_Window *window;
-global SDL_Renderer *renderer;
-global SDL_Event event;
-
 //NOTE(abhicv) : from ('!') = 33 to ('~') = 126
 #define MAX_ASCII_CHAR 94
 
@@ -27,6 +23,10 @@ int main(int argc, char *argv[])
         SDL_Log("Failed to initialize SDL : %s\n", SDL_GetError());
         return 1;
     }
+    
+    SDL_Window *window = NULL;
+    SDL_Renderer *renderer = NULL;
+    SDL_Event event = {0};
     
     window = SDL_CreateWindow("SmallEd",
                               SDL_WINDOWPOS_UNDEFINED,
@@ -49,6 +49,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
+    //pixel buffer
     Buffer buffer = {0};
     buffer.data = malloc(sizeof(u32) * SCREEN_WIDTH * SCREEN_HEIGHT);
     buffer.width = SCREEN_WIDTH;
@@ -60,7 +61,7 @@ int main(int argc, char *argv[])
         printf("Failed to create SDL texture : %s\n", SDL_GetError());
     }
     
-    FontData fontData = LoadFont("font/Inconsolata.ttf", 25);
+    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 25);
     
     FontBitMap fontBitMaps[MAX_ASCII_CHAR];
     
@@ -76,7 +77,7 @@ int main(int argc, char *argv[])
     Rect caret = {0};
     caret.x = 0;
     caret.y = 0;
-    caret.width = 12;
+    caret.width = 3;
     caret.height = fontData.lineGap + fontData.ascent - fontData.descent;
     
     Rect lineHighlight = {0};
@@ -100,7 +101,7 @@ int main(int argc, char *argv[])
     
     //reading a file
     {
-        FILE *file = fopen("test_file.c", "r");
+        FILE *file = fopen("../src/main.c", "r");
         fseek(file, 0, SEEK_END);
         u32 size = ftell(file);
         fseek(file, 0, SEEK_SET);
@@ -114,13 +115,15 @@ int main(int argc, char *argv[])
     }
     
     u32 currentActiveLineNumber = 1;
+    u32 maxLinesDisplayable = SCREEN_HEIGHT / caret.height;
+    u32 lowestLineNumber = 1;
     u32 numOfLines = 0;
     
     b32 quit = false;
     SDL_StartTextInput();
     while(!quit)
     {
-        while(SDL_PollEvent(&event) != 0)
+        while(SDL_PollEvent(&event))
         {
             switch(event.type)
             {
@@ -147,19 +150,19 @@ int main(int argc, char *argv[])
                 }
                 else if(event.key.keysym.sym == SDLK_LEFT)
                 {
-                    MoveLeft(&textSeq);
+                    MoveCursorLeft(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_RIGHT)
                 {
-                    MoveRight(&textSeq);
+                    MoveCursorRight(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_UP)
                 {
-                    MoveUp(&textSeq);
+                    MoveCursorUp(&textSeq);
                 }
                 else if(event.key.keysym.sym == SDLK_DOWN)
                 {
-                    MoveDown(&textSeq);
+                    MoveCursorDown(&textSeq);
                 }
                 break;
                 
@@ -169,22 +172,20 @@ int main(int argc, char *argv[])
             }
         }
         
-        ClearBuffer(&buffer, (Color){0, 0, 0, 0});
+        ClearBuffer(&buffer, (Color){18, 18, 18, 0});
         
-        //NOTE(abhicv): calculating caret position, active line number, total no. of lines
+        //NOTE(abhicv): calculating caret x position, active line number, total no. of lines
         {
             caret.x = lineMargin.width;
             caret.y = 0;
             currentActiveLineNumber = 1;
             numOfLines = 0;
             
-            for(u32 n = 0; n < textSeq.preEndIndex + 1; n++)
+            for(i32 n = 0; n <= textSeq.preEndIndex; n++)
             {
                 if(textSeq.buffer[n] == '\n')
                 {
-                    caret.y += caret.height;
                     caret.x = lineMargin.width;
-                    
                     currentActiveLineNumber++;
                     numOfLines++;
                 }
@@ -201,9 +202,8 @@ int main(int argc, char *argv[])
                     caret.x += roundf(advance * fontData.scale);
                 }
             }
-            lineHighlight.y = caret.y;
             
-            for(u32 n = textSeq.postStartIndex; n < TEXT_BUFFER_SIZE; n++)
+            for(i32 n = textSeq.postStartIndex; n < TEXT_BUFFER_SIZE; n++)
             {
                 if(textSeq.buffer[n] == '\n')
                 {
@@ -211,6 +211,22 @@ int main(int argc, char *argv[])
                 }
             }
         }
+        
+        //scrolling by changing lowest visible line number
+        if(currentActiveLineNumber >= (lowestLineNumber + maxLinesDisplayable))
+        {
+            lowestLineNumber++;
+        }
+        else if(currentActiveLineNumber < lowestLineNumber)
+        {
+            lowestLineNumber--;
+        }
+        
+        //caret y position
+        caret.y = (currentActiveLineNumber - lowestLineNumber) * caret.height;
+        lineHighlight.y = caret.y;
+        
+        //printf("low num: %d\n", lowestLineNumber);
         
         //Rendering
         {
@@ -222,30 +238,37 @@ int main(int argc, char *argv[])
             //NOTE(abhicv): line numbers
             {
                 u32 p = lineMargin.y;
-                for(u32 n = 1; n < 30; n++)
+                for(u32 n = lowestLineNumber; n < (maxLinesDisplayable + lowestLineNumber); n++)
                 {
                     char number[3] = {0, 0, 0};
                     sprintf(&number[0], "%d\0", n);
-                    RenderTextBuffer(&buffer, &number[0], &fontData, fontBitMaps, lineMargin.x + 4, p, 0, 2);
+                    RenderText(&buffer, &number[0], &fontData, fontBitMaps, lineMargin.x + 1, p, 0, 2);
                     p += fontData.lineGap + fontData.ascent - fontData.descent;
                 }
             }
             
-            //NOTE(abhicv): creating new buffer combining pre and post span buffers
+            u32 startIndex = 0;
+            
+            u32 highestLineNumber = lowestLineNumber + maxLinesDisplayable - 1;
+            
+            //NOTE(abhicv): calculating start index from lowestLineNumber and maxLinesDisplayable
             {
-                u32 size = (textSeq.preEndIndex + 1) + (TEXT_BUFFER_SIZE - textSeq.postStartIndex) + 1;
-                u8 *textOriginalBuffer = (u8*)malloc(size);
-                
-                if(textOriginalBuffer != NULL)
+                u32 cl = currentActiveLineNumber;
+                for(i32 n = textSeq.preEndIndex; n >= 0; n--)
                 {
-                    memset(&textOriginalBuffer[0], 0, size);
-                    memcpy(&textOriginalBuffer[0], &textSeq.buffer[0], textSeq.preEndIndex + 1);
-                    memcpy(&textOriginalBuffer[textSeq.preEndIndex + 1], &textSeq.buffer[textSeq.postStartIndex], TEXT_BUFFER_SIZE - textSeq.postStartIndex);
-                    
-                    RenderTextBuffer(&buffer, &textOriginalBuffer[0], &fontData, fontBitMaps, lineMargin.width, 0, 0, size - 1);
-                    free(textOriginalBuffer);
+                    if(textSeq.buffer[n] == '\n')
+                    {
+                        cl--;
+                        if(cl == (lowestLineNumber - 1))
+                        {
+                            startIndex = n + 1;
+                            break;
+                        }
+                    }
                 }
             }
+            
+            RenderTextBuffer(&buffer, &textSeq.buffer[0], &fontData, fontBitMaps, lineMargin.width, 0, textSeq.preEndIndex, textSeq.postStartIndex, startIndex, TEXT_BUFFER_SIZE);
             
             SDL_UpdateTexture(texture, NULL, buffer.data, 4 * buffer.width);
             SDL_RenderClear(renderer);

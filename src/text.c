@@ -22,7 +22,7 @@ void DeleteItem(TextSequence *tSeq)
     }
 }
 
-void MoveLeft(TextSequence *tSeq)
+void MoveCursorLeft(TextSequence *tSeq)
 {
     if(tSeq->preEndIndex > -1)
     {
@@ -30,7 +30,7 @@ void MoveLeft(TextSequence *tSeq)
     }
 }
 
-void MoveRight(TextSequence *tSeq)
+void MoveCursorRight(TextSequence *tSeq)
 {
     if(tSeq->postStartIndex < TEXT_BUFFER_SIZE)
     {
@@ -38,21 +38,21 @@ void MoveRight(TextSequence *tSeq)
     }
 }
 
-void MoveUp(TextSequence *tSeq)
+void MoveCursorUp(TextSequence *tSeq)
 {
     u32 currentLineCharCount = 0;
     while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
     {
-        MoveLeft(tSeq);
+        MoveCursorLeft(tSeq);
         currentLineCharCount++;
     }
     
-    MoveLeft(tSeq);
+    MoveCursorLeft(tSeq);
     
     u32 upperLineCharCount = 0;
     while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
     {
-        MoveLeft(tSeq);
+        MoveCursorLeft(tSeq);
         upperLineCharCount++;
     }
     
@@ -60,39 +60,39 @@ void MoveUp(TextSequence *tSeq)
     {
         for(u32 n = 0; n < currentLineCharCount; n++)
         {
-            MoveRight(tSeq);
+            MoveCursorRight(tSeq);
         }
     }
     else
     {
         for(u32 n = 0; n < upperLineCharCount; n++)
         {
-            MoveRight(tSeq);
+            MoveCursorRight(tSeq);
         }
     }
 }
 
-void MoveDown(TextSequence *tSeq)
+void MoveCursorDown(TextSequence *tSeq)
 {
     u32 currentLineCharCount = 0;
     
     while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
     {
-        MoveLeft(tSeq);
+        MoveCursorLeft(tSeq);
         currentLineCharCount++;
     }
     
     while(tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
     {
-        MoveRight(tSeq);
+        MoveCursorRight(tSeq);
     }
     
-    MoveRight(tSeq);
+    MoveCursorRight(tSeq);
     
     u32 n = 0;
     while(n < currentLineCharCount && tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
     {
-        MoveRight(tSeq);
+        MoveCursorRight(tSeq);
         n++;
     }
 }

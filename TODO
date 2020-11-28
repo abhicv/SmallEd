@@ -1,5 +1,5 @@
-- scrolling text edit area
-- loading, saving and creating files
+- scrolling text edit area => done, but is slow nned some optimization
+- loading, saving and creating files	
 - directory listing and search
 - copy paste text sequences
 - undo system

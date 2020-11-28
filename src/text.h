@@ -15,10 +15,10 @@ void InsertItem(TextSequence *tSeq, u8 item);
 void DeleteItem(TextSequence *tSeq);
 
 //cursor movement
-void MoveLeft(TextSequence *tSeq);
-void MoveRight(TextSequence *tSeq);
-void MoveUp(TextSequence *tSeq);
-void MoveDown(TextSequence *tSeq);
+void MoveCursorLeft(TextSequence *tSeq);
+void MoveCursorRight(TextSequence *tSeq);
+void MoveCursorUp(TextSequence *tSeq);
+void MoveCursorDown(TextSequence *tSeq);
 
 #define TEXT_BUFFER_SIZE 1024 * 1024 //1 megabyte of text edit buffer(gap buffer)
 
