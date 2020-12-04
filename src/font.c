@@ -96,7 +96,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
 #if 1
                         Color dst = GetBufferPixelColor(buffer, x, y);
                         Color src = {alpha, alpha, alpha, alpha};
-                        Color c = {200, 200, 200, 255};
+                        Color c = {255, 255, 255, 255};
                         Color blendColor = BlendPixel(dst, src, c);
                         
                         buffer->data[x + y * buffer->width] = 
@@ -141,12 +141,12 @@ void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *
         if(c >= '!' && c <= '~')
         {
             Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c - 33].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c - 33].yOffset;
-            glyphRect.width = fontBitMaps[c - 33].width;
-            glyphRect.height = fontBitMaps[c - 33].height;
+            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
+            glyphRect.y = baseline + fontBitMaps[c].yOffset;
+            glyphRect.width = fontBitMaps[c].width;
+            glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
             
             cursorX += roundf(advance * fontData->scale);
             
@@ -189,12 +189,12 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
         if(c >= '!' && c <= '~')
         {
             Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c - 33].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c - 33].yOffset;
-            glyphRect.width = fontBitMaps[c - 33].width;
-            glyphRect.height = fontBitMaps[c - 33].height;
+            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
+            glyphRect.y = baseline + fontBitMaps[c].yOffset;
+            glyphRect.width = fontBitMaps[c].width;
+            glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
             
             cursorX += roundf(advance * fontData->scale);
             
@@ -206,7 +206,7 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
         }
     }
     
-    for(i32 i = postStartIndex; i < endIndex; i++)
+    for(i32 i = postStartIndex; i <= endIndex; i++)
     {
         char c = textBuffer[i];
         
@@ -229,12 +229,12 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
         if(c >= '!' && c <= '~')
         {
             Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c - 33].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c - 33].yOffset;
-            glyphRect.width = fontBitMaps[c - 33].width;
-            glyphRect.height = fontBitMaps[c - 33].height;
+            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
+            glyphRect.y = baseline + fontBitMaps[c].yOffset;
+            glyphRect.width = fontBitMaps[c].width;
+            glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c - 33].bitMap, &glyphRect);
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
             
             cursorX += roundf(advance * fontData->scale);
             

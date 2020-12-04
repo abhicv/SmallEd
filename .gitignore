@@ -3,4 +3,5 @@ bin/*.exe
 bin/*.ilk
 bin/*.pdb
 bin/*.sln
+bin/.vs
 .gitignore
