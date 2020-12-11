@@ -10,6 +10,10 @@
 typedef struct FontData
 {
     stbtt_fontinfo fontInfo;
+    
+    //data read from font file
+    u8 *rawData;
+    
     u32 size;
     f32 scale;
     

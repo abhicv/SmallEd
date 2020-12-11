@@ -1,8 +1,9 @@
 #include "font.h"
+#include "debug.h"
 
 FontData LoadFont(const char *fontFile, u32 size)
 {
-    stbtt_fontinfo fontInfo = {0};
+    FontData fontData = {0};
     
     FILE *fontFileHandle = fopen(fontFile, "rb");
     if(fontFileHandle != NULL)
@@ -11,20 +12,25 @@ FontData LoadFont(const char *fontFile, u32 size)
         u32 size = ftell(fontFileHandle); 
         fseek(fontFileHandle, 0, SEEK_SET);
         
-        u8 *fontBuffer = (u8*)malloc(size);
-        fread(fontBuffer, 1, size, fontFileHandle);
+        fontData.rawData = (u8*)malloc(size);
+        i32 readStatus = fread(fontData.rawData, 1, size, fontFileHandle);
         
-        stbtt_InitFont(&fontInfo, fontBuffer, stbtt_GetFontOffsetForIndex(fontBuffer, 0));
+        if(readStatus == size)
+        {
+            printf("Read all bytes successfully from '%s'\n", fontFile);
+            stbtt_InitFont(&fontData.fontInfo, fontData.rawData, stbtt_GetFontOffsetForIndex(fontData.rawData, 0));
+        }
         
         fclose(fontFileHandle);
     }
     
-    i32 ascent, descent, lineGap;
-    stbtt_GetFontVMetrics(&fontInfo, &ascent, &descent, &lineGap);
-    f32 scale = stbtt_ScaleForPixelHeight(&fontInfo, size);
+    i32 ascent = 0;
+    i32 descent = 0; 
+    i32 lineGap = 0;
     
-    FontData fontData = {0};
-    fontData.fontInfo = fontInfo;
+    stbtt_GetFontVMetrics(&fontData.fontInfo, &ascent, &descent, &lineGap);
+    f32 scale = stbtt_ScaleForPixelHeight(&fontData.fontInfo, size);
+    
     fontData.size = size;
     fontData.scale = scale;
     fontData.ascent = roundf(ascent * scale);
@@ -69,21 +75,20 @@ Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
     return color;
 }
 
-void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
+void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *destRect, Color color)
 {
     if(buffer != NULL && bitMap != NULL)
     {
-        for(u32 y = rect->y; y < (rect->y + rect->height); y++)
+        for(u32 y = destRect->y; y < (destRect->y + destRect->height); y++)
         {
-            for(u32 x = rect->x; x < (rect->x + rect->width); x++)
+            for(u32 x = destRect->x; x < (destRect->x + destRect->width); x++)
             {
                 if(x >= 0 && y >= 0 && x < buffer->width && y < buffer->height)
                 {
-                    u32 bX = x - rect->x;
-                    u32 bY = y - rect->y;
-                    u8 alpha = bitMap[bX + bY * rect->width];
+                    u32 bX = x - destRect->x;
+                    u32 bY = y - destRect->y;
+                    u8 alpha = bitMap[bX + bY * destRect->width];
                     
-                    //if(alpha > 0)
                     {
 #if 0
                         buffer->data[x + y * buffer->width] = 
@@ -96,8 +101,7 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *rect)
 #if 1
                         Color dst = GetBufferPixelColor(buffer, x, y);
                         Color src = {alpha, alpha, alpha, alpha};
-                        Color c = {255, 255, 255, 255};
-                        Color blendColor = BlendPixel(dst, src, c);
+                        Color blendColor = BlendPixel(dst, src, color);
                         
                         buffer->data[x + y * buffer->width] = 
                             (blendColor.r << 24) | 
@@ -146,7 +150,9 @@ void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *
             glyphRect.width = fontBitMaps[c].width;
             glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
+            Color color = {255, 255, 255 ,255};
+            
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
             
@@ -194,7 +200,8 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             glyphRect.width = fontBitMaps[c].width;
             glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
+            Color color = {255, 255, 255, 255};
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
             
@@ -234,7 +241,14 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             glyphRect.width = fontBitMaps[c].width;
             glyphRect.height = fontBitMaps[c].height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect);
+            Color color = {255, 255, 255, 255};
+            
+            if(i == postStartIndex)
+            {
+                color.r = color.g = color.b = 0;
+            }
+            
+            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
             
