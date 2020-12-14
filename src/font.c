@@ -1,5 +1,6 @@
 #include "font.h"
 #include "debug.h"
+#include "lexer.h"
 
 FontData LoadFont(const char *fontFile, u32 size)
 {
@@ -165,12 +166,14 @@ void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *
     }
 }
 
-void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, 
+void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u8* colorIndexBuffer, u32 xPos, u32 yPos, 
                       i32 preEndIndex, i32 postStartIndex,
                       u32 startIndex, u32 endIndex)
 {
     u32 cursorX = xPos;
     u32 baseline = yPos + fontData->ascent + fontData->lineGap;
+    
+    u32 colorIndex = startIndex;
     
     for(i32 i = startIndex; i <= preEndIndex; i++)
     {
@@ -200,7 +203,9 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             glyphRect.width = fontBitMaps[c].width;
             glyphRect.height = fontBitMaps[c].height;
             
-            Color color = {255, 255, 255, 255};
+            //Color color = {255, 255, 255, 255};
+            Color color = ColorLookUpTable[colorIndexBuffer[colorIndex]];
+            
             RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
@@ -211,6 +216,7 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
                 cursorX += roundf(kern * fontData->scale);
             }
         }
+        colorIndex++;
     }
     
     for(i32 i = postStartIndex; i <= endIndex; i++)
@@ -241,8 +247,9 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             glyphRect.width = fontBitMaps[c].width;
             glyphRect.height = fontBitMaps[c].height;
             
-            Color color = {255, 255, 255, 255};
+            //Color color = {255, 255, 255, 255};
             
+            Color color = ColorLookUpTable[colorIndexBuffer[colorIndex]];
             if(i == postStartIndex)
             {
                 color.r = color.g = color.b = 0;
@@ -258,5 +265,6 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
                 cursorX += roundf(kern * fontData->scale);
             }
         }
+        colorIndex++;
     }
 }

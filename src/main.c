@@ -9,6 +9,7 @@
 #include "text.c"
 #include "file.c"
 #include "render.c"
+#include "lexer.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    SDL_Window *window = SDL_CreateWindow("SmallEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
+    SDL_Window *window = SDL_CreateWindow("SmallEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT,  SDL_WINDOW_RESIZABLE);
     
     if(window == NULL)
     {
@@ -81,7 +82,7 @@ int main(int argc, char *argv[])
         printf("Failed to create SDL texture : %s\n", SDL_GetError());
     }
     
-    FontData fontData = LoadFont("font/Inconsolata.ttf", 25);
+    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 30);
     
     FontBitMap fontBitMaps[256];
     
@@ -127,7 +128,7 @@ int main(int argc, char *argv[])
     
     //reading a file
     {
-        char *file_name = "test_file.c";
+        char *file_name = "hello.c";
         
         if(argc > 1)
         {
@@ -295,7 +296,7 @@ int main(int argc, char *argv[])
                 
                 case SDL_TEXTINPUT:
                 InsertItem(&textSeq, event.text.text[0]);
-                printf("typed: %s\n", event.text.text);
+                //printf("typed: %s\n", event.text.text);
                 break;
                 
                 case SDL_WINDOWEVENT:
@@ -306,7 +307,7 @@ int main(int argc, char *argv[])
                     SDL_GetWindowSize(window, &w, &h);
                     printf("Window size changed to width : %d, height : %d\n", w, h);
                     
-                    //resizing display buffers to fit to new window dimensions
+                    //resizing display buffer and SDL_Texture to fit to new window dimensions
                     SDL_DestroyTexture(texture);
                     texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR32, SDL_TEXTUREACCESS_STATIC, w, h);
                     
@@ -452,7 +453,23 @@ int main(int argc, char *argv[])
             
             //printf("si: %d, ei: %d, pre: %d, post: %d, ll: %d, hl: %d, nl: %d\n", startIndex, endIndex, textSeq.preEndIndex, textSeq.postStartIndex, lowestLineNumber, highestLineNumber, numOfLines);
             
-            RenderTextBuffer(&displayBuffer, &textSeq.buffer[0], &fontData, fontBitMaps, lineMargin.width, 0, textSeq.preEndIndex, textSeq.postStartIndex, startIndex, endIndex);
+            //syntax highlighting
+            u32 size = (textSeq.preEndIndex + 1) + (TEXT_BUFFER_SIZE - textSeq.postStartIndex);
+            u8* colorIndexBuffer = (u8*)malloc(size);
+            memset(colorIndexBuffer, 3, size);
+            
+            u8* textBuffer = (u8*)malloc(size);
+            memset(textBuffer, 0, size);
+            memcpy(textBuffer, textSeq.buffer, textSeq.preEndIndex + 1);
+            memcpy(textBuffer + textSeq.preEndIndex + 1, textSeq.buffer + textSeq.postStartIndex, (TEXT_BUFFER_SIZE - textSeq.postStartIndex));
+            
+            //Lexical analysis to fint ketwords and strings and fill colorIndexbuffer
+            Lexer(textBuffer, size, colorIndexBuffer, size);
+            
+            free(colorIndexBuffer);
+            free(textBuffer);
+            
+            RenderTextBuffer(&displayBuffer, &textSeq.buffer[0], &fontData, fontBitMaps, colorIndexBuffer, lineMargin.width, 0, textSeq.preEndIndex, textSeq.postStartIndex, startIndex, endIndex);
             
             SDL_UpdateTexture(texture, NULL, displayBuffer.data, 4 * displayBuffer.width);
             SDL_RenderClear(renderer);
