@@ -67,12 +67,10 @@ Color BlendPix(Color dst, Color src)
 Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
 {
     Color color = {0};
-    
     color.r = (buffer->data[x + y * buffer->width] & 0xFF000000) >> 24;
     color.g = (buffer->data[x + y * buffer->width] & 0x00FF0000) >> 16;
     color.b = (buffer->data[x + y * buffer->width] & 0x0000FF00) >> 8;
     color.a = (buffer->data[x + y * buffer->width] & 0x000000FF) >> 0;
-    
     return color;
 }
 
@@ -90,27 +88,16 @@ void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *destRect, Color color)
                     u32 bY = y - destRect->y;
                     u8 alpha = bitMap[bX + bY * destRect->width];
                     
-                    {
-#if 0
-                        buffer->data[x + y * buffer->width] = 
-                            (alpha << 24) | 
-                            (alpha << 16) | 
-                            (alpha << 8) | 
-                            (alpha  << 0);
-#endif
-                        
-#if 1
-                        Color dst = GetBufferPixelColor(buffer, x, y);
-                        Color src = {alpha, alpha, alpha, alpha};
-                        Color blendColor = BlendPixel(dst, src, color);
-                        
-                        buffer->data[x + y * buffer->width] = 
-                            (blendColor.r << 24) | 
-                            (blendColor.g << 16) | 
-                            (blendColor.b << 8) | 
-                            (blendColor.a  << 0);
-#endif 
-                    }
+                    Color dst = GetBufferPixelColor(buffer, x, y);
+                    //Color src = {alpha, alpha, alpha, alpha};
+                    Color src = {255, 255, 255, alpha};
+                    Color blendColor = BlendPixel(dst, src, color);
+                    
+                    buffer->data[x + y * buffer->width] = 
+                        (blendColor.r << 24) | 
+                        (blendColor.g << 16) | 
+                        (blendColor.b << 8) | 
+                        (blendColor.a  << 0);
                 }
             }
         }

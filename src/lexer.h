@@ -109,11 +109,11 @@ global u8* C_keywords[] = {
 };
 
 global Color ColorLookUpTable[] = {
-    {255, 127, 40, 255}, //keywords
-    {181, 230, 30, 255}, //strings
-    {255, 240, 128, 255}, //numbers
-    {255, 255, 255, 255}, //default 
-    {50, 255, 255, 255}, //comments
+    {216, 105, 19, 255}, //keywords
+    {196, 234, 93, 255}, //strings
+    {196, 234, 93, 255}, //numbers
+    {183, 193, 158, 255}, //default 
+    {32, 236, 240, 255}, //comments
 };
 
 u8* CreateString(const u8* buffer, u32 startIndex, u32 size)

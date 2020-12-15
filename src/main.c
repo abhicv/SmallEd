@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
         printf("Failed to create SDL texture : %s\n", SDL_GetError());
     }
     
-    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 21);
+    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 20);
     
     FontBitMap fontBitMaps[256];
     
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     SDL_StartTextInput();
     while(!quit)
     {
-        if(SDL_WaitEvent(&event) > 0)
+        while(SDL_PollEvent(&event) > 0)
         {
             switch(event.type)
             {
@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
             }
         }
         
-        ClearBuffer(&displayBuffer, (Color){20, 20, 20, 255});
+        ClearBuffer(&displayBuffer, (Color){9, 13, 18, 255});
         
         //NOTE(abhicv): calculating caret x position, active line number, total no. of lines
         {
@@ -394,10 +394,10 @@ int main(int argc, char *argv[])
             DrawRectWire(&displayBuffer, &lineMargin, (Color){50, 50, 50, 255});
             
             //line highlight
-            DrawRect(&displayBuffer, &lineHighlight, (Color){40, 40, 40, 255});
+            DrawRect(&displayBuffer, &lineHighlight, (Color){26, 38, 52, 255});
             
             //caret
-            DrawRect(&displayBuffer, &caret, (Color){255, 255, 0, 255});
+            DrawRect(&displayBuffer, &caret, (Color){238, 232, 0, 255});
             
             //copy paste caret
             DrawRectWire(&displayBuffer, &copyPasteCaret, (Color){255, 255, 255, 255});
