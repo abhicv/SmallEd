@@ -2,7 +2,7 @@
 #include "debug.h"
 #include "lexer.h"
 
-FontData LoadFont(const char *fontFile, u32 size)
+FontData LoadFont(const char *fontFile, u32 fontSize)
 {
     FontData fontData = {0};
     
@@ -30,9 +30,9 @@ FontData LoadFont(const char *fontFile, u32 size)
     i32 lineGap = 0;
     
     stbtt_GetFontVMetrics(&fontData.fontInfo, &ascent, &descent, &lineGap);
-    f32 scale = stbtt_ScaleForPixelHeight(&fontData.fontInfo, size);
+    f32 scale = stbtt_ScaleForPixelHeight(&fontData.fontInfo, fontSize);
     
-    fontData.size = size;
+    fontData.size = fontSize;
     fontData.scale = scale;
     fontData.ascent = roundf(ascent * scale);
     fontData.descent = roundf(descent * scale);
@@ -166,7 +166,7 @@ void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *
     }
 }
 
-void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u8* colorIndexBuffer, u32 xPos, u32 yPos, 
+void RenderTextBuffer(Buffer *renderBuffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u8* colorIndexBuffer, u32 xPos, u32 yPos, 
                       i32 preEndIndex, i32 postStartIndex,
                       u32 startIndex, u32 endIndex)
 {
@@ -175,9 +175,10 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
     
     u32 colorIndex = startIndex;
     
+    //from start index to preEndIndex
     for(i32 i = startIndex; i <= preEndIndex; i++)
     {
-        char c = textBuffer[i];
+        u8 c = textBuffer[i];
         
         i32 advance = 0, lsb = 0;
         stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
@@ -206,7 +207,7 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
             //Color color = {255, 255, 255, 255};
             Color color = ColorLookUpTable[colorIndexBuffer[colorIndex]];
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
+            RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
             
@@ -219,9 +220,10 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
         colorIndex++;
     }
     
+    //from postStartIndex to endIndex
     for(i32 i = postStartIndex; i <= endIndex; i++)
     {
-        char c = textBuffer[i];
+        u8 c = textBuffer[i];
         
         i32 advance = 0, lsb = 0;
         stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
@@ -255,7 +257,7 @@ void RenderTextBuffer(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBi
                 color.r = color.g = color.b = 0;
             }
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
+            RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
             
             cursorX += roundf(advance * fontData->scale);
             

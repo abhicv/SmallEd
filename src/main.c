@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
         printf("Failed to create SDL texture : %s\n", SDL_GetError());
     }
     
-    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 30);
+    FontData fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 21);
     
     FontBitMap fontBitMaps[256];
     
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     SDL_StartTextInput();
     while(!quit)
     {
-        while(SDL_PollEvent(&event) > 0)
+        if(SDL_WaitEvent(&event) > 0)
         {
             switch(event.type)
             {
@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
             //NOTE(abhicv): line numbers
             {
                 u32 p = lineMargin.y;
-                for(u32 n = lowestLineNumber; n <= (maxLinesDisplayable + lowestLineNumber); n++)
+                for(u32 n = lowestLineNumber; (n <= (maxLinesDisplayable + lowestLineNumber)) && (n <= numOfLines); n++)
                 {
                     char number[3] = {0, 0, 0};
                     sprintf(&number[0], "%d\0", n);
@@ -466,10 +466,10 @@ int main(int argc, char *argv[])
             //Lexical analysis to fint ketwords and strings and fill colorIndexbuffer
             Lexer(textBuffer, size, colorIndexBuffer, size);
             
+            RenderTextBuffer(&displayBuffer, &textSeq.buffer[0], &fontData, fontBitMaps, colorIndexBuffer, lineMargin.width, 0, textSeq.preEndIndex, textSeq.postStartIndex, startIndex, endIndex);
+            
             free(colorIndexBuffer);
             free(textBuffer);
-            
-            RenderTextBuffer(&displayBuffer, &textSeq.buffer[0], &fontData, fontBitMaps, colorIndexBuffer, lineMargin.width, 0, textSeq.preEndIndex, textSeq.postStartIndex, startIndex, endIndex);
             
             SDL_UpdateTexture(texture, NULL, displayBuffer.data, 4 * displayBuffer.width);
             SDL_RenderClear(renderer);

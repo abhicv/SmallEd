@@ -112,8 +112,8 @@ global Color ColorLookUpTable[] = {
     {255, 127, 40, 255}, //keywords
     {181, 230, 30, 255}, //strings
     {255, 240, 128, 255}, //numbers
-    {210, 210, 210, 255}, //default 
-    {0, 0, 255, 255}, //comments
+    {255, 255, 255, 255}, //default 
+    {50, 255, 255, 255}, //comments
 };
 
 u8* CreateString(const u8* buffer, u32 startIndex, u32 size)
@@ -132,7 +132,6 @@ u8* CreateString(const u8* buffer, u32 startIndex, u32 size)
 
 void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorIndexBufferSize)
 {
-    u32 id = 1;
     for(u32 n = 0; n < bufferSize; n++)
     {
         if(ALPHA_CHAR(buffer[n])) //keywords
@@ -142,8 +141,6 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
             {
                 if(MatchString(buffer, bufferSize, &n, C_keywords[m], strlen(C_keywords[m])))
                 {
-                    //printf("ID: %d, TOKEN_TYPE: keyword, VALUE: %s\n", id, C_keywords[m]);
-                    //id++;
                     u32 startIndex = n - strlen(C_keywords[m]);
                     for(u32 i = startIndex; i < n; i++)
                     {
@@ -174,11 +171,6 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
             
             if(stringTokenFound)
             {
-                //u8* str = CreateString(buffer, startIndex, size); 
-                //printf("ID: %d, TOKEN_TYPE: string, VALUE: %s\n", id, str);
-                //id++;
-                //free(str);
-                
                 u32 startIndex = n - size - 1;
                 
                 for(u32 i = startIndex; i <= n; i++)
@@ -205,6 +197,7 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
         {
             u32 startIndex = n;
             u32 size = 0;
+            
             while(buffer[n] != '\n')
             {
                 size++;
