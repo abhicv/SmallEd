@@ -1,10 +1,11 @@
 #include "text.h"
 
-void InsertItem(TextSequence *tSeq, u8 item)
+void InsertItem(TextSequence *tSeq, u8 character)
 {
     if(tSeq->gapSize > 0)
     {
-        tSeq->buffer[++tSeq->preEndIndex] = item;
+        tSeq->buffer[tSeq->preSize] = character;
+        tSeq->preSize++;
         tSeq->gapSize--;
     }
     else
@@ -15,59 +16,86 @@ void InsertItem(TextSequence *tSeq, u8 item)
 
 void DeleteItem(TextSequence *tSeq)
 {
-    if(tSeq->preEndIndex > -1)
+    if(tSeq->preSize > 0)
     {
-        tSeq->preEndIndex--;
+        tSeq->preSize--;
         tSeq->gapSize++;
     }
 }
 
 void MoveCursorLeft(TextSequence *tSeq)
 {
-    if(tSeq->preEndIndex > -1)
+    if(tSeq->preSize > 0)
     {
-        tSeq->buffer[--tSeq->postStartIndex] = tSeq->buffer[tSeq->preEndIndex--];
+        u32 fromIndex = tSeq->preSize - 1;
+        u32 toIndex = tSeq->bufferCapacity - tSeq->postSize - 1;
+        
+        tSeq->buffer[toIndex] = tSeq->buffer[fromIndex];
+        
+        tSeq->preSize--;
+        tSeq->postSize++;
     }
 }
 
 void MoveCursorRight(TextSequence *tSeq)
 {
-    if(tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    if(tSeq->postSize > 0)
     {
-        tSeq->buffer[++tSeq->preEndIndex] = tSeq->buffer[tSeq->postStartIndex++];
+        u32 fromIndex = tSeq->bufferCapacity - tSeq->postSize;
+        u32 toIndex = tSeq->preSize;
+        
+        tSeq->buffer[toIndex] = tSeq->buffer[fromIndex];
+        
+        tSeq->preSize++;
+        tSeq->postSize--;
     }
 }
 
 void MoveCursorUp(TextSequence *tSeq)
 {
     u32 currentLineCharCount = 0;
-    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
-    {
-        MoveCursorLeft(tSeq);
-        currentLineCharCount++;
-    }
     
-    MoveCursorLeft(tSeq);
-    
-    u32 upperLineCharCount = 0;
-    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
+    if(tSeq->preSize > 0)
     {
-        MoveCursorLeft(tSeq);
-        upperLineCharCount++;
-    }
-    
-    if(upperLineCharCount >= currentLineCharCount)
-    {
-        for(u32 n = 0; n < currentLineCharCount; n++)
+        while(tSeq->buffer[tSeq->preSize - 1] != '\n')
         {
-            MoveCursorRight(tSeq);
+            MoveCursorLeft(tSeq);
+            
+            if(tSeq->preSize == 0)
+            {
+                return;
+            }
+            
+            currentLineCharCount++;
         }
-    }
-    else
-    {
-        for(u32 n = 0; n < upperLineCharCount; n++)
+        
+        MoveCursorLeft(tSeq);
+        
+        u32 upperLineCharCount = 0;
+        while(tSeq->buffer[tSeq->preSize - 1] != '\n')
         {
-            MoveCursorRight(tSeq);
+            MoveCursorLeft(tSeq);
+            upperLineCharCount++;
+            
+            if(tSeq->preSize == 0)
+            {
+                break;
+            }
+        }
+        
+        if(upperLineCharCount >= currentLineCharCount)
+        {
+            for(u32 n = 0; n < currentLineCharCount; n++)
+            {
+                MoveCursorRight(tSeq);
+            }
+        }
+        else
+        {
+            for(u32 n = 0; n < upperLineCharCount; n++)
+            {
+                MoveCursorRight(tSeq);
+            }
         }
     }
 }
@@ -76,23 +104,47 @@ void MoveCursorDown(TextSequence *tSeq)
 {
     u32 currentLineCharCount = 0;
     
-    while(tSeq->buffer[tSeq->preEndIndex] != '\n' && tSeq->preEndIndex > -1)
+    if(tSeq->preSize > 0)
     {
-        MoveCursorLeft(tSeq);
-        currentLineCharCount++;
+        while(tSeq->buffer[tSeq->preSize - 1] != '\n')
+        {
+            MoveCursorLeft(tSeq);
+            currentLineCharCount++;
+            
+            if(tSeq->preSize == 0)
+            {
+                break;
+            }
+        }
     }
     
-    while(tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    if(tSeq->postSize > 0)
     {
-        MoveCursorRight(tSeq);
+        while(tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize] != '\n')
+        {
+            MoveCursorRight(tSeq);
+            
+            if(tSeq->postSize == 0)
+            {
+                return;
+            }
+        }
     }
     
     MoveCursorRight(tSeq);
     
-    u32 n = 0;
-    while(n < currentLineCharCount && tSeq->buffer[tSeq->postStartIndex] != '\n' && tSeq->postStartIndex < TEXT_BUFFER_SIZE)
+    if(tSeq->postSize > 0)
     {
-        MoveCursorRight(tSeq);
-        n++;
+        u32 n = 0;
+        while(n < currentLineCharCount && tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize] != '\n')
+        {
+            MoveCursorRight(tSeq);
+            n++;
+            
+            if(tSeq->postSize == 0)
+            {
+                break;
+            }
+        }
     }
 }

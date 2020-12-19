@@ -2,6 +2,7 @@
 #define UI_H
 
 #include "types.h"
+#include "render.h"
 
 #define MAX_LIST_CAPACITY 100
 
@@ -11,11 +12,11 @@ typedef struct ListMenu
     u32 length;
     u8 *itemName[MAX_LIST_CAPACITY];
     u32 selectedItem;
-}
+}LisrtMenu;
 
-void RenderListMenu(ListMenu *listMenu)
+void RenderListMenu(Buffer renderBuffer, ListMenu *listMenu)
 {
-    
+    return;
 }
 
 #endif //UI_H

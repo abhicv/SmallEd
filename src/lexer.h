@@ -52,7 +52,7 @@ b32 MatchString(const u8* buffer, u32 bufferSize, u32 *currentIndex, const u8* m
         return false;
     }
     
-    if(!ALPHA_CHAR(buffer[*currentIndex + matchStringLen]))
+    if(!ALPHA_CHAR(buffer[*currentIndex + matchStringLen])) //char after last char of search word
     {
         *currentIndex += matchStringLen;
         return true;
@@ -112,17 +112,20 @@ global Color ColorLookUpTable[] = {
     {216, 105, 19, 255}, //keywords
     {196, 234, 93, 255}, //strings
     {196, 234, 93, 255}, //numbers
-    {183, 193, 158, 255}, //default 
+    {200, 200, 200, 255}, //default 
     {32, 236, 240, 255}, //comments
 };
 
-u8* CreateString(const u8* buffer, u32 startIndex, u32 size)
+//creating string from a char buffer
+u8* CreateStringFromCharBuffer(const u8* charBuffer, u32 startIndex, u32 size)
 {
     u8* str = (u8*)malloc(size + 1);
+    u32 endIndex = startIndex + size;
+    
     u32 m = 0;
-    for(u32 n = startIndex; n < (startIndex + size); n++)
+    for(u32 n = startIndex; n < endIndex; n++)
     {
-        str[m] = buffer[n];
+        str[m] = charBuffer[n];
         m++;
     }
     str[size] = 0;
@@ -136,8 +139,8 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
     {
         if(ALPHA_CHAR(buffer[n])) //keywords
         {
-            u32 s = sizeof(C_keywords) / sizeof(u8*);
-            for(u32 m = 0; m < s; m++)
+            u32 keyWordListSize = sizeof(C_keywords) / sizeof(u8*);
+            for(u32 m = 0; m < keyWordListSize; m++)
             {
                 if(MatchString(buffer, bufferSize, &n, C_keywords[m], strlen(C_keywords[m])))
                 {
@@ -186,19 +189,19 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
                 colorIndexBuffer[n] = 2;
             }
         }
-        else if(buffer[n] == '\'' && buffer[n + 2] == '\'')
+        else if(buffer[n] == '\'' && buffer[n + 2] == '\'') //single character
         {
             colorIndexBuffer[n] = 2;
             colorIndexBuffer[n + 1] = 2;
             colorIndexBuffer[n + 2] = 2;
             n += 2;
         }
-        else if(buffer[n] == '/' && buffer[n + 1] == '/')
+        else if(buffer[n] == '/' && buffer[n + 1] == '/') //comments
         {
             u32 startIndex = n;
             u32 size = 0;
             
-            while(buffer[n] != '\n')
+            while(buffer[n] != '\n' && n < bufferSize)
             {
                 size++;
                 n++;

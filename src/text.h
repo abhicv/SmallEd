@@ -4,10 +4,10 @@
 typedef struct TextSequence
 {
     u8 *buffer;
-    i32 preEndIndex;
-    i32 postStartIndex;
+    u32 preSize;
+    u32 postSize;
     u32 gapSize;
-    u32 bufferSize;
+    u32 bufferCapacity;
     
 } TextSequence;
 

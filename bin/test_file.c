@@ -7,7 +7,7 @@ FontData LoadFont(const char *fontFile, u32 size)
     if(fontFileHandle != NULL)
     {
         fseek(fontFileHandle, 0, SEEK_END);
-        u32 size = ftell(fontFileHandle); 
+        u32 size = ftell(fontFileHandle);
         fseek(fontFileHandle, 0, SEEK_SET);
         
         u8 *fontBuffer = (u8*)malloc(size);

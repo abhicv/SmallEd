@@ -1,10 +1,10 @@
-#include <stdio.h>
-
-int main(int argc, char **argv)
+unsigned long int add(unsigned long int x, unsigned long int y)
 {
-    aint x = 100;
-    float y = 123.45f;
-    
-    printf("Hello SmallEd!");
+    return x + y;
+}
+
+int main(void)
+{
+    unsigned long int z = add(10, 20);
     return 0;
 }
