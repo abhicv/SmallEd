@@ -8,20 +8,28 @@
 
 #include "smalled_render.h"
 
+typedef struct BitMap
+{
+    u8 *pixels;
+    u32 width; 
+    u32 height;
+    
+} BitMap;
+
 typedef struct FontData
 {
     stbtt_fontinfo fontInfo;
+    stbtt_bakedchar charDatas[256];
     
-    //data read from font file
-    u8 *rawData;
+    //raw data read from ttf file
+    u8 *rawFontData;
     
-    u32 size;
-    f32 scale;
+    BitMap atlasBitMap;
+    
+    f32 fontSize;
+    u32 lineHeight;
     
     //stored in pixel unit
-    i32 ascent;
-    i32 descent;
-    i32 lineGap;
     
 } FontData;
 

@@ -4,20 +4,6 @@
 #include "types.h"
 #include "smalled_render.h"
 
-enum Token
-{
-    TOKEN_IDENT,
-    TOKEN_OPERATOR,
-    TOKEN_KEYWORD,
-    TOKEN_STRING,
-    TOKEN_NUMBER,
-    TOKEN_COMMENTS,
-    TOKEN_CHARACTER,
-    TOKEN_CURLY_BRACKETS,
-    TOKEN_BRACKETS,
-    TOKEN_SEMICOLON,
-};
-
 #define ALPHA_CHAR(c) ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
 #define NUMBER_CHAR(c) (c >= '0' && c <= '9')
 
@@ -25,12 +11,12 @@ b32 MatchString(const u8* buffer, u32 bufferSize, u32 *currentIndex, const u8* m
 {
     u8 prevChar = 0;
     
-    if(*currentIndex > 0)
+    if((*currentIndex) > 0)
     {
-        prevChar = buffer[*currentIndex - 1];
+        prevChar = buffer[(*currentIndex) - 1];
     }
     
-    if(!ALPHA_CHAR(prevChar))
+    if(!ALPHA_CHAR(prevChar) || (*currentIndex == 0))
     {
         for(u32 i = 0; i < matchStringLen; i++)
         {
@@ -52,7 +38,7 @@ b32 MatchString(const u8* buffer, u32 bufferSize, u32 *currentIndex, const u8* m
         return false;
     }
     
-    if(!ALPHA_CHAR(buffer[*currentIndex + matchStringLen])) //char after last char of search word
+    if(!ALPHA_CHAR(buffer[*currentIndex + matchStringLen]) || ((*currentIndex + matchStringLen) == bufferSize)) //char after last char of search word
     {
         *currentIndex += matchStringLen;
         return true;
@@ -164,7 +150,7 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
             {
                 size++;
                 n++;
-                if(buffer[n] == '\n')
+                if(buffer[n] == '\n' || n == bufferSize)
                 {
                     stringTokenFound = false;
                     break;

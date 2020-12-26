@@ -5,7 +5,7 @@
 
 #include "smalled_memory.h"
 
-FontData* LoadFont(Memory *memory, const char *fontFile, u32 fontSize)
+FontData* LoadFont(Memory *memory, const char *fontFile, f32 fontSize)
 {
     FontData *fontData = NULL;
     fontData = (FontData*)AllocateMemory(memory, sizeof(FontData));
@@ -17,31 +17,49 @@ FontData* LoadFont(Memory *memory, const char *fontFile, u32 fontSize)
         u32 size = ftell(fontFileHandle); 
         fseek(fontFileHandle, 0, SEEK_SET);
         
-        fontData->rawData = (u8*)AllocateMemory(memory, size);
+        fontData->rawFontData = (u8*)AllocateMemory(memory, size);
         
-        i32 readStatus = fread(fontData->rawData, 1, size, fontFileHandle);
+        i32 readStatus = fread(fontData->rawFontData, 1, size, fontFileHandle);
         
         if(readStatus == size)
         {
             printf("Read all bytes successfully from '%s'\n", fontFile);
-            stbtt_InitFont(&fontData->fontInfo, fontData->rawData, stbtt_GetFontOffsetForIndex(fontData->rawData, 0));
+            stbtt_InitFont(&fontData->fontInfo, fontData->rawFontData, stbtt_GetFontOffsetForIndex(fontData->rawFontData, 0));
         }
         
         fclose(fontFileHandle);
     }
+    else
+    {
+        printf("Font file '%s' opening failed!!\n", fontFile);
+        return NULL;
+    }
+    
+    float s = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, 1) / stbtt_ScaleForPixelHeight(&fontData->fontInfo, 1);
+    
+    fontData->atlasBitMap.width = 512;
+    fontData->atlasBitMap.height = 512;
+    fontData->atlasBitMap.pixels = (u8*)malloc(fontData->atlasBitMap.width * fontData->atlasBitMap.height);
+    
+    stbtt_BakeFontBitmap(fontData->rawFontData, 0, fontSize * s, fontData->atlasBitMap.pixels,
+                         fontData->atlasBitMap.width, fontData->atlasBitMap.height, 0, 256, fontData->charDatas);
+    
+    f32 scale = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, fontSize);
     
     i32 ascent = 0;
     i32 descent = 0; 
     i32 lineGap = 0;
     
     stbtt_GetFontVMetrics(&fontData->fontInfo, &ascent, &descent, &lineGap);
-    f32 scale = stbtt_ScaleForPixelHeight(&fontData->fontInfo, fontSize);
     
-    fontData->size = fontSize;
-    fontData->scale = scale;
-    fontData->ascent = roundf(ascent * scale);
-    fontData->descent = roundf(descent * scale);
-    fontData->lineGap = roundf(lineGap * scale);
+    fontData->fontSize = fontSize;
+    fontData->lineHeight = (ascent - descent + lineGap) * scale + 0.5f;
+    
+    for(u32 n = 0; n < 256; n++)
+    {
+        fontData->charDatas[n].yoff += (ascent * scale) + 0.5f;
+        fontData->charDatas[n].xadvance = floor(fontData->charDatas[n].xadvance);
+    }
     
     return fontData;
 }
@@ -58,17 +76,6 @@ Color BlendPixel(Color dst, Color src, Color color)
     return dst;
 }
 
-Color BlendPix(Color dst, Color src) 
-{
-    int ia = 0xff - src.a;
-    
-    dst.r = ((src.r * src.a) + (dst.r * ia)) >> 8;
-    dst.g = ((src.g * src.a) + (dst.g * ia)) >> 8;
-    dst.b = ((src.b * src.a) + (dst.b * ia)) >> 8;
-    
-    return dst;
-}
-
 Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
 {
     Color color = {0};
@@ -79,202 +86,79 @@ Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
     return color;
 }
 
-void RenderFontBitMap(Buffer *buffer, u8 *bitMap, Rect *destRect, Color color)
+void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap, Rect *srcRect, Color color)
 {
-    if(buffer != NULL && bitMap != NULL)
+    if(renderBuffer != NULL && atlasBitMap != NULL)
     {
+        u32 cY = srcRect->y;
+        
         for(u32 y = destRect->y; y < (destRect->y + destRect->height); y++)
         {
+            u32 cX = srcRect->x;
             for(u32 x = destRect->x; x < (destRect->x + destRect->width); x++)
             {
-                if(x >= 0 && y >= 0 && x < buffer->width && y < buffer->height)
+                if(x >= 0 && y >=0 && x < renderBuffer->width && y < renderBuffer->height)
                 {
-                    u32 bX = x - destRect->x;
-                    u32 bY = y - destRect->y;
-                    u8 alpha = bitMap[bX + bY * destRect->width];
+                    u8 alpha = atlasBitMap->pixels[cX + cY * atlasBitMap->width];
                     
-                    Color dst = GetBufferPixelColor(buffer, x, y);
-                    //Color src = {alpha, alpha, alpha, alpha};
+                    Color dst = GetBufferPixelColor(renderBuffer, x, y);
                     Color src = {255, 255, 255, alpha};
                     Color blendColor = BlendPixel(dst, src, color);
                     
-                    buffer->data[x + y * buffer->width] = 
+                    renderBuffer->data[x + y * renderBuffer->width] = 
                         (blendColor.r << 24) | 
                         (blendColor.g << 16) | 
                         (blendColor.b << 8) | 
                         (blendColor.a  << 0);
                 }
+                cX++;
             }
+            cY++;
         }
     }
 }
 
-void RenderText(Buffer *buffer, u8 *textBuffer, FontData *fontData, FontBitMap *fontBitMaps, u32 xPos, u32 yPos, 
-                u32 startIndex, u32 endIndex)
+void RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontData, 
+                u32 xPos, u32 yPos, Color color)
 {
-    u32 cursorX = xPos;
-    u32 baseline = yPos + fontData->ascent + fontData->lineGap;
+    u32 x = xPos;
+    u32 y = yPos;
     
-    for(u32 i = startIndex; i <= endIndex; i++)
+    for(u32 i = 0; i < size; i++)
     {
         char c = textBuffer[i];
         
-        i32 advance = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
-        
-        if(c == '\n') //new line
+        if(c == '\t')
         {
-            baseline += fontData->lineGap + fontData->ascent - fontData->descent;
-            cursorX = xPos;
+            x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
         }
-        if(c == '\t') //tab
+        else
         {
-            cursorX += 4 * roundf(advance * fontData->scale);
-        }
-        if(c == ' ') //space
-        {
-            cursorX += roundf(advance * fontData->scale);
-        }
-        if(c >= '!' && c <= '~')
-        {
-            Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c].yOffset;
-            glyphRect.width = fontBitMaps[c].width;
-            glyphRect.height = fontBitMaps[c].height;
+            Rect srcRect = {0};
+            srcRect.x = fontData->charDatas[(u32)c].x0;
+            srcRect.y = fontData->charDatas[(u32)c].y0;
+            srcRect.width = fontData->charDatas[(u32)c].x1 - fontData->charDatas[(u32)c].x0;
+            srcRect.height = fontData->charDatas[(u32)c].y1 - fontData->charDatas[(u32)c].y0;
             
-            Color color = {255, 255, 255 ,255};
+            Rect destRect = {0};
+            destRect.x = x + fontData->charDatas[(u32)c].xoff;
+            destRect.y = y + fontData->charDatas[(u32)c].yoff;
+            destRect.width = srcRect.width;
+            destRect.height = srcRect.height;
             
-            RenderFontBitMap(buffer, fontBitMaps[c].bitMap, &glyphRect, color);
+            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
             
-            cursorX += roundf(advance * fontData->scale);
-            
-            if(textBuffer[i + 1])
-            {
-                i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, textBuffer[i], textBuffer[i + 1]);
-                cursorX += roundf(kern * fontData->scale);
-            }
-        }
-    }
-}
-
-void RenderTextBuffer(Buffer *renderBuffer, TextSequence *tSeq, 
-                      FontData *fontData, FontBitMap *fontBitMaps, u8* colorIndexBuffer, 
-                      u32 xPos, u32 yPos, 
-                      u32 startIndex, u32 endIndex)
-{
-    u32 cursorX = xPos;
-    u32 baseline = yPos + fontData->ascent + fontData->lineGap;
-    
-    u32 colorIndex = startIndex;
-    
-    //from start index to preEndIndex
-    for(u32 i = startIndex; i < tSeq->preSize; i++)
-    {
-        u8 c = tSeq->buffer[i];
-        
-        i32 advance = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
-        
-        if(c == '\n') //new line
-        {
-            baseline += fontData->lineGap + fontData->ascent - fontData->descent;
-            cursorX = xPos;
-        }
-        if(c == '\t') //tab
-        {
-            cursorX += 4 * roundf(advance * fontData->scale);
-        }
-        if(c == ' ') //space
-        {
-            cursorX += roundf(advance * fontData->scale);
-        }
-        if(c >= '!' && c <= '~')
-        {
-            Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c].yOffset;
-            glyphRect.width = fontBitMaps[c].width;
-            glyphRect.height = fontBitMaps[c].height;
-            
-            //Color color = {255, 255, 255, 255};
-            Color color = ColorLookUpTable[colorIndexBuffer[colorIndex]];
-            
-            RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
-            
-            cursorX += roundf(advance * fontData->scale);
-            
-            if(tSeq->buffer[i + 1])
-            {
-                i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, tSeq->buffer[i], tSeq->buffer[i + 1]);
-                cursorX += roundf(kern * fontData->scale);
-            }
-        }
-        colorIndex++;
-    }
-    
-    //from postStartIndex to endIndex
-    if(tSeq->postSize > 0)
-    {
-        u32 postStartIndex = (tSeq->bufferCapacity - tSeq->postSize);
-        
-        for(u32 i = postStartIndex; i <= endIndex; i++)
-        {
-            u8 c = tSeq->buffer[i];
-            
-            i32 advance = 0, lsb = 0;
-            stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
-            
-            if(c == '\n') //new line
-            {
-                baseline += fontData->lineGap + fontData->ascent - fontData->descent;
-                cursorX = xPos;
-            }
-            if(c == '\t') //tab
-            {
-                cursorX += 4 * roundf(advance * fontData->scale);
-            }
-            if(c == ' ') //space
-            {
-                cursorX += roundf(advance * fontData->scale);
-            }
-            if(c >= '!' && c <= '~')
-            {
-                Rect glyphRect = {0};
-                glyphRect.x = cursorX + fontBitMaps[c].xOffset;
-                glyphRect.y = baseline + fontBitMaps[c].yOffset;
-                glyphRect.width = fontBitMaps[c].width;
-                glyphRect.height = fontBitMaps[c].height;
-                
-                //Color color = {255, 255, 255, 255};
-                
-                Color color = ColorLookUpTable[colorIndexBuffer[colorIndex]];
-                if(i == postStartIndex)
-                {
-                    color.r = color.g = color.b = 0;
-                }
-                
-                RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
-                
-                cursorX += roundf(advance * fontData->scale);
-                
-                if(tSeq->buffer[i + 1])
-                {
-                    i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, tSeq->buffer[i], tSeq->buffer[i + 1]);
-                    cursorX += roundf(kern * fontData->scale);
-                }
-            }
-            colorIndex++;
+            x += fontData->charDatas[(u32)c].xadvance;
         }
     }
 }
 
 void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq, 
-                        FontData *fontData, FontBitMap *fontBitMaps, 
+                        FontData *fontData, 
                         u32 xPos, u32 yPos, b32 activeTSeq)
 {
-    u32 cursorX = xPos;
-    u32 baseline = yPos + fontData->ascent + fontData->lineGap;
+    u32 x = xPos;
+    u32 y = yPos;
     
     u32 colorIndex = 0;
     
@@ -283,42 +167,29 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
     {
         u8 c = tSeq->buffer[i];
         
-        if(c == '\t') //tab
+        if(c == '\t')
         {
-            i32 advance = 0, lsb = 0;
-            stbtt_GetCodepointHMetrics(&fontData->fontInfo, 'A', &advance, &lsb);
-            
-            cursorX += 4 * roundf(advance * fontData->scale);
-        }
-        else if(c >= '!' && c <= '~')
-        {
-            i32 advance = 0, lsb = 0;
-            stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
-            
-            Rect glyphRect = {0};
-            glyphRect.x = cursorX + fontBitMaps[c].xOffset;
-            glyphRect.y = baseline + fontBitMaps[c].yOffset;
-            glyphRect.width = fontBitMaps[c].width;
-            glyphRect.height = fontBitMaps[c].height;
-            
-            //Color color = {255, 255, 255, 255};
-            Color color = ColorLookUpTable[tSeq->colorIndexBuffer[colorIndex]];
-            
-            RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
-            
-            cursorX += roundf(advance * fontData->scale);
-            
-            if(tSeq->buffer[i + 1])
-            {
-                i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, tSeq->buffer[i], tSeq->buffer[i + 1]);
-                cursorX += roundf(kern * fontData->scale);
-            }
+            x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
         }
         else
         {
-            i32 advance = 0, lsb = 0;
-            stbtt_GetCodepointHMetrics(&fontData->fontInfo,'A', &advance, &lsb);
-            cursorX += roundf(advance * fontData->scale);
+            Rect srcRect = {0};
+            srcRect.x = fontData->charDatas[(u32)c].x0;
+            srcRect.y = fontData->charDatas[(u32)c].y0;
+            srcRect.width = fontData->charDatas[(u32)c].x1 - fontData->charDatas[(u32)c].x0;
+            srcRect.height = fontData->charDatas[(u32)c].y1 - fontData->charDatas[(u32)c].y0;
+            
+            Rect destRect = {0};
+            destRect.x = x + fontData->charDatas[(u32)c].xoff;
+            destRect.y = y + fontData->charDatas[(u32)c].yoff;
+            destRect.width = srcRect.width;
+            destRect.height = srcRect.height;
+            
+            Color color = ColorLookUpTable[tSeq->colorIndexBuffer[colorIndex]];
+            
+            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+            
+            x += fontData->charDatas[(u32)c].xadvance;
         }
         
         colorIndex++;
@@ -332,48 +203,36 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
         for(u32 i = postStartIndex; i < tSeq->bufferCapacity; i++)
         {
             u8 c = tSeq->buffer[i];
-            if(c == '\t') //tab
+            
+            if(c == '\t')
             {
-                i32 advance = 0, lsb = 0;
-                stbtt_GetCodepointHMetrics(&fontData->fontInfo, 'A', &advance, &lsb);
-                
-                cursorX += 4 * roundf(advance * fontData->scale);
-            }
-            else if(c >= '!' && c <= '~')
-            {
-                i32 advance = 0, lsb = 0;
-                stbtt_GetCodepointHMetrics(&fontData->fontInfo, c, &advance, &lsb);
-                
-                Rect glyphRect = {0};
-                glyphRect.x = cursorX + fontBitMaps[c].xOffset;
-                glyphRect.y = baseline + fontBitMaps[c].yOffset;
-                glyphRect.width = fontBitMaps[c].width;
-                glyphRect.height = fontBitMaps[c].height;
-                
-                //Color color = {255, 255, 255, 255};
-                Color color = ColorLookUpTable[tSeq->colorIndexBuffer[colorIndex]];
-                if(i == postStartIndex && activeTSeq)
-                {
-                    color.r = color.g = color.b = 0;
-                }
-                
-                RenderFontBitMap(renderBuffer, fontBitMaps[c].bitMap, &glyphRect, color);
-                
-                cursorX += roundf(advance * fontData->scale);
-                
-                if(tSeq->buffer[i + 1])
-                {
-                    i32 kern = stbtt_GetCodepointKernAdvance(&fontData->fontInfo, tSeq->buffer[i], tSeq->buffer[i + 1]);
-                    cursorX += roundf(kern * fontData->scale);
-                }
+                x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
             }
             else
             {
-                i32 advance = 0, lsb = 0;
-                stbtt_GetCodepointHMetrics(&fontData->fontInfo,'A', &advance, &lsb);
-                cursorX += roundf(advance * fontData->scale);
+                Rect srcRect = {0};
+                srcRect.x = fontData->charDatas[(u32)c].x0;
+                srcRect.y = fontData->charDatas[(u32)c].y0;
+                srcRect.width = fontData->charDatas[(u32)c].x1 - fontData->charDatas[(u32)c].x0;
+                srcRect.height = fontData->charDatas[(u32)c].y1 - fontData->charDatas[(u32)c].y0;
+                
+                Rect destRect = {0};
+                destRect.x = x + fontData->charDatas[(u32)c].xoff;
+                destRect.y = y + fontData->charDatas[(u32)c].yoff;
+                destRect.width = srcRect.width;
+                destRect.height = srcRect.height;
+                
+                Color color = ColorLookUpTable[tSeq->colorIndexBuffer[colorIndex]];
+                
+                if(activeTSeq && i == postStartIndex)
+                {
+                    color = (Color){0, 0, 0, 255};
+                }
+                
+                RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+                
+                x += fontData->charDatas[(u32)c].xadvance;
             }
-            
             colorIndex++;
         }
     }

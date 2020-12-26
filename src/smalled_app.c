@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <Windows.h>
-
 #include <SDL2/SDL.h>
+
+#include "Windows.h"
 
 #include "types.h"
 
@@ -12,48 +12,198 @@
 #include "smalled_text.c"
 #include "smalled_file.c"
 #include "smalled_render.c"
-
 #include "smalled_lexer.h"
 #include "smalled_memory.h"
 
-#define DEFAULT_SCREEN_WIDTH 1280
-#define DEFAULT_SCREEN_HEIGHT 720
+#define SCREEN_WIDTH 1280
+#define SCREEN_HEIGHT 720
 
-#define MAX_SCREEN_WIDTH 1980
-#define MAX_SCREEN_HEIGHT 1080
+/*
 
-typedef struct EditSpace
+In smalled_app.c now one text sequence for entire editing session(a file)
+seeking cursor through large file is slow
+
+PLAN OF ATTACK
+
+Solution thought of:
+each text sequence is a line
+each line can have upto 1024 ascii characters, if need more can be allocated on demand
+memory allocations are to be kept minimum
+10 * 1024 lines max = 10240
+Total buffer size = 10 * 1024 * 1020 = 10 MB = 10485760 bytes or ascii characters
+when adding new lines all previs lines are to be shifted down the line
+since here lines are pointers to text sequence.
+or gap buffer of TextSequence pointers can also be made,so inserting new lines become trivial
+
+*/
+
+typedef struct TextBuffer
 {
-    TextSequence textSeq;
+    TextSequence *lines;
     
-    u8 loadedFileName[250];
+    u32 preSize;
+    u32 postSize;
+    u32 gapSize;
+    u32 capacity;
     
-    u32 nLines;
     u32 currentLine;
-    u32 currentColumn;
-    
     u32 lowestLine;
-    u32 maxLinesDisplayable;
+    u32 maxLinesVisible;
     
-    Rect caretRect;
-    Rect copyCaretRect;
-    Rect editAreaRect;
-    Rect lineMarginRect;
-    Rect headerRect;
-    
-} EditSpace;
+} TextBuffer;
 
-void EditSpaceEventHandler(SDL_Event *event, EditSpace *editSpace)
+void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *textBuffer)
 {
+    u32 nCharInLine = 0;
+    u32 lineStartIndex = 0;
+    u32 lineCount = 0;
     
+    for(u32 n = 0; n < fileSize; n++)
+    {
+        if((fileBuffer[n] == '\n') || (n == fileSize - 1))
+        {
+            if(lineCount == 0)
+            {
+                TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
+                
+                //tSeq->bufferCapacity = 2 * nCharInLine;
+                tSeq->bufferCapacity = KiloByte(2);
+                
+                tSeq->buffer = (u8*)malloc(tSeq->bufferCapacity);
+                tSeq->colorIndexBuffer = (u8*)malloc(tSeq->bufferCapacity);
+                
+                tSeq->preSize = 0;
+                tSeq->postSize = nCharInLine;
+                tSeq->gapSize = tSeq->bufferCapacity - tSeq->postSize;
+                
+                memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], &fileBuffer[lineStartIndex], nCharInLine);
+                
+                textBuffer->preSize++;
+            }
+            else
+            {
+                TextSequence *tSeq = &textBuffer->lines[textBuffer->capacity - textBuffer->postSize + lineCount - 1];
+                
+                //tSeq->bufferCapacity = 2 * nCharInLine;
+                tSeq->bufferCapacity = KiloByte(2);
+                
+                tSeq->buffer = (u8*)malloc(tSeq->bufferCapacity);
+                tSeq->colorIndexBuffer = (u8*)malloc(tSeq->bufferCapacity);
+                
+                tSeq->preSize = 0;
+                tSeq->postSize = nCharInLine;
+                tSeq->gapSize = tSeq->bufferCapacity - tSeq->postSize;
+                
+                memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], &fileBuffer[lineStartIndex], nCharInLine);
+            }
+            
+            nCharInLine = 0;
+            lineStartIndex = n + 1;
+            lineCount++;
+        }
+        else
+        {
+            nCharInLine++;
+        }
+    }
 }
 
-void SetEditSpaceDimensions(EditSpace *editSpace, u32 x, u32 y, u32 width, u32 height)
+void InsertLine(TextBuffer *textBuffer)
 {
+    TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
     
+    tSeq->bufferCapacity = KiloByte(2);
+    
+    tSeq->buffer = (u8*)malloc(tSeq->bufferCapacity);
+    tSeq->colorIndexBuffer = (u8*)malloc(tSeq->bufferCapacity);
+    
+    tSeq->preSize = 0;
+    tSeq->postSize = textBuffer->lines[textBuffer->currentLine].postSize;
+    tSeq->gapSize = tSeq->bufferCapacity - tSeq->postSize;
+    
+    if(tSeq->postSize > 0)
+    {
+        memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], 
+               &textBuffer->lines[textBuffer->currentLine].buffer[textBuffer->lines[textBuffer->currentLine].bufferCapacity - tSeq->postSize], 
+               tSeq->postSize);
+    }
+    
+    //shrinking previous line
+    textBuffer->lines[textBuffer->currentLine].postSize = 0;
+    
+    textBuffer->preSize++;
+    textBuffer->gapSize--;
+    textBuffer->currentLine++;
 }
 
-void RenderEditSpace(Buffer *renderBuffer, EditSpace *editSpace)
+void DeleteLine(TextBuffer *textBuffer)
+{
+    if(textBuffer->preSize > 1)
+    {
+        TextSequence *cTSeq = &textBuffer->lines[textBuffer->currentLine];
+        TextSequence *tSeq = &textBuffer->lines[textBuffer->currentLine - 1];
+        
+        while(tSeq->postSize > 0)
+        {
+            MoveCursorRight(tSeq);
+        }
+        
+        for(u32 n = 0; n < cTSeq->preSize; n++)
+        {
+            InsertItem(tSeq, cTSeq->buffer[n]);
+        }
+        
+        if(cTSeq->postSize > 0)
+        {
+            for(u32 n = (cTSeq->bufferCapacity - cTSeq->postSize); n < cTSeq->bufferCapacity; n++)
+            {
+                InsertItem(tSeq, cTSeq->buffer[n]);
+            }
+        }
+        
+        for(u32 n = 0; n < (cTSeq->preSize + cTSeq->postSize); n++)
+        {
+            MoveCursorLeft(tSeq);
+        }
+        
+        free(cTSeq->buffer);
+        free(cTSeq->colorIndexBuffer);
+        
+        textBuffer->preSize--;
+        textBuffer->currentLine--;
+        textBuffer->gapSize++;
+    }
+}
+
+void MoveCursorUpGlobal(TextBuffer *textBuffer)
+{
+    if(textBuffer->preSize > 1)
+    {
+        u32 fromIndex = textBuffer->preSize - 1;
+        u32 toIndex = textBuffer->capacity - textBuffer->postSize - 1;
+        
+        textBuffer->lines[toIndex] = textBuffer->lines[fromIndex];
+        textBuffer->preSize--;
+        textBuffer->postSize++;
+        textBuffer->currentLine--;
+    }
+}
+
+void MoveCursorDownGlobal(TextBuffer *textBuffer)
+{
+    if(textBuffer->postSize > 0)
+    {
+        u32 fromIndex = textBuffer->capacity - textBuffer->postSize;
+        u32 toIndex = textBuffer->preSize;
+        
+        textBuffer->lines[toIndex] = textBuffer->lines[fromIndex];
+        textBuffer->preSize++;
+        textBuffer->postSize--;
+        textBuffer->currentLine++;
+    }
+}
+
+void RenderTextBuffer()
 {
     
 }
@@ -66,7 +216,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    SDL_Window *window = SDL_CreateWindow("SmallEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT,  SDL_WINDOW_RESIZABLE);
+    SDL_Window *window = SDL_CreateWindow("SmallEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT,  SDL_WINDOW_RESIZABLE);
     
     if(window == NULL)
     {
@@ -74,7 +224,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, 3, SDL_RENDERER_ACCELERATED);
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, 3, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     
     if(renderer == NULL)
     {
@@ -82,148 +232,92 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    SDL_Rect displayBounRect = {0};
-    SDL_GetDisplayBounds(SDL_GetWindowDisplayIndex(window), &displayBounRect);
-    
-    //allocated by SDL internally
-    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR32, SDL_TEXTUREACCESS_STATIC, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT);
-    
+    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR32, SDL_TEXTUREACCESS_STATIC, SCREEN_WIDTH, SCREEN_HEIGHT);
     if(texture == NULL)
     {
         printf("Failed to create SDL texture : %s\n", SDL_GetError());
         return 1;
     }
     
-    //all memory ever needed by the application
+    SDL_Rect displayBounRect = {0};
+    SDL_GetDisplayBounds(SDL_GetWindowDisplayIndex(window), &displayBounRect);
+    
     Memory memory = {0};
     memory.permanentStorageSize = MegaByte(64);
     memory.permanentStorage = VirtualAlloc(0, memory.permanentStorageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     
     //pixel buffer
     Buffer displayBuffer = {0};
+    displayBuffer.data = (u32*)AllocateMemory(&memory, sizeof(u32) * displayBounRect.w * displayBounRect.h);
+    displayBuffer.width = SCREEN_WIDTH;
+    displayBuffer.height = SCREEN_HEIGHT;
     
-    //allocating maximum size display buffer
-    displayBuffer.data = AllocateMemory(&memory, sizeof(u32) * displayBounRect.w * displayBounRect.h);
-    displayBuffer.width = DEFAULT_SCREEN_WIDTH;
-    displayBuffer.height = DEFAULT_SCREEN_HEIGHT;
-    
-    FontData *fontData = LoadFont(&memory, "font/JetBrainsMono-Regular.ttf", 22);
-    FontBitMap *fontBitMaps = (FontBitMap*)AllocateMemory(&memory, sizeof(FontBitMap) * 256);
-    
-    //NOTE(abhicv): ascii character bitmaps loading
-    {
-        for(u8 n = 33; n < 127; n++)
-        {
-            //Bitmap Rasterizing
-            fontBitMaps[n].bitMap = stbtt_GetCodepointBitmap(&fontData->fontInfo, 0, fontData->scale, n, &fontBitMaps[n].width, &fontBitMaps[n].height, &fontBitMaps[n].xOffset, &fontBitMaps[n].yOffset);
-        }
-    }
-    
-    i32 a = 0, l = 0;
-    stbtt_GetCodepointHMetrics(&fontData->fontInfo, 'A', &a, &l);
+    FontData *fontData = LoadFont(&memory, "font/JetBrainsMono-Regular.ttf", 18);
     
     Rect caret = {0};
     caret.x = 0;
     caret.y = 0;
-    caret.width = roundf(a * fontData->scale);
-    caret.height = fontData->lineGap + fontData->ascent - fontData->descent;
-    
-    Rect copyPasteCaret = {0};
-    copyPasteCaret.x = 0;
-    copyPasteCaret.y = 0;
-    copyPasteCaret.width = 4;
-    copyPasteCaret.height = fontData->lineGap + fontData->ascent - fontData->descent;
+    caret.width = fontData->charDatas[(u32)('A')].xadvance;
+    caret.height = fontData->lineHeight;
     
     Rect lineHighlight = {0};
     lineHighlight.x = 0;
     lineHighlight.y = 0;
-    lineHighlight.width = DEFAULT_SCREEN_WIDTH;
+    lineHighlight.width = SCREEN_WIDTH;
     lineHighlight.height = caret.height;
-    
-    Rect header = {0};
-    header.x = 0;
-    header.y = 0;
-    header.width = DEFAULT_SCREEN_WIDTH;
-    header.height = fontData->lineGap + fontData->ascent - fontData->descent + 4;
     
     Rect lineMargin = {0};
     lineMargin.x = 0;
-    lineMargin.y = header.x + header.height;
-    lineMargin.width = 3 * roundf(a * fontData->scale) + 5;
-    lineMargin.height = DEFAULT_SCREEN_HEIGHT;
+    lineMargin.y = 0;
+    lineMargin.height = SCREEN_HEIGHT;
     
-    TextSequence textSeq = {0};
-    textSeq.bufferCapacity = TEXT_BUFFER_SIZE;
-    textSeq.buffer = AllocateMemory(&memory, TEXT_BUFFER_SIZE);
+    TextBuffer textBuffer = {0};
     
-    //reading a file
+    //reading a file and breaking into lines
     {
-        char *fileName = "test_file.c";
+        //char *fileName = "checker.ts";
+        char *fileName = "test.c";
         
+        //file name as cmd line arg
         if(argc > 1)
         {
             fileName = argv[1];
         }
         
-        //windows file api
-        HANDLE fileHnd = NULL;
-        fileHnd = CreateFileA(fileName,
-                              GENERIC_READ,
-                              FILE_SHARE_READ,
-                              NULL,
-                              OPEN_ALWAYS,
-                              FILE_ATTRIBUTE_NORMAL,
-                              NULL);
+        File file = ReadFileFromDisk(fileName);
         
-        if(fileHnd != INVALID_HANDLE_VALUE)
+        if(file.loaded)
         {
-            u32 size = 0;
-            size = GetFileSize(fileHnd, NULL);
+            u32 nLines = GetLineCount(file.buffer, file.size);
             
-            u32 readBytes = 0;
-            ReadFile(fileHnd,
-                     &textSeq.buffer[TEXT_BUFFER_SIZE - size],
-                     size,
-                     &readBytes,
-                     NULL);
+            textBuffer.capacity = nLines * 2;
+            textBuffer.lines = (TextSequence*)malloc(sizeof(TextSequence) * textBuffer.capacity);
+            textBuffer.lowestLine = 0;
+            textBuffer.currentLine = 0;
+            textBuffer.maxLinesVisible = 1 + (SCREEN_HEIGHT / fontData->lineHeight);
+            textBuffer.preSize = 0;
+            textBuffer.postSize = nLines - 1;
+            textBuffer.gapSize = textBuffer.capacity - nLines;
             
-            if(readBytes == size)
-            {
-                printf("Read all bytes from '%s'\n", fileName);
-            }
-            else
-            {
-                printf("error reading bytes from '%s'\n", fileName);
-            }
-            
-            CloseHandle(fileHnd);
-            
-            textSeq.gapSize = textSeq.bufferCapacity - size;
-            textSeq.preSize = 0;
-            textSeq.postSize = size;
+            BreakFileIntoLines(file.buffer, file.size, nLines, &textBuffer);
         }
-        else
-        {
-            printf("failed to open the file '%s'\n", fileName);
-            return 1;
-        }
+        
+        free(file.buffer);
     }
     
-    u32 currentActiveLineNumber = 1;
-    u32 maxLinesDisplayable = (DEFAULT_SCREEN_HEIGHT - header.height) / caret.height;
-    u32 lowestLineNumber = 1;
-    u32 numOfLines = 0;
-    
-    i32 copyStartIndex = 0;
-    
     b32 quit = false;
+    
+    u32 gotoLine = 0;
+    
+    u64 frames = 0;
+    u64 prevTime = 0;
     
     SDL_Event event = {0};
     
     SDL_StartTextInput();
     while(!quit)
     {
-        while(SDL_PollEvent(&event) > 0)
+        while(SDL_PollEvent(&event))
         {
             switch(event.type)
             {
@@ -239,7 +333,14 @@ int main(int argc, char *argv[])
                 
                 if(event.key.keysym.sym == SDLK_BACKSPACE)
                 {
-                    DeleteItem(&textSeq);
+                    if(textBuffer.lines[textBuffer.currentLine].preSize > 0)
+                    {
+                        DeleteItem(&textBuffer.lines[textBuffer.currentLine]);
+                    }
+                    else
+                    {
+                        DeleteLine(&textBuffer);
+                    }
                 }
                 else if(event.key.keysym.sym == SDLK_ESCAPE)
                 {
@@ -247,107 +348,78 @@ int main(int argc, char *argv[])
                 }
                 else if(event.key.keysym.sym == SDLK_RETURN)
                 {
-                    InsertItem(&textSeq, '\n');
+                    InsertLine(&textBuffer);
                 }
                 else if(event.key.keysym.sym == SDLK_TAB)
                 {
-                    InsertItem(&textSeq, '\t');
+                    InsertItem(&textBuffer.lines[textBuffer.currentLine], '\t');
                 }
                 else if(event.key.keysym.sym == SDLK_LEFT)
                 {
-                    MoveCursorLeft(&textSeq);
-                }
-                else if(event.key.keysym.sym == SDLK_RIGHT)
-                {
-                    MoveCursorRight(&textSeq);
-                }
-                else if(event.key.keysym.sym == SDLK_UP)
-                {
-                    MoveCursorUp(&textSeq);
-                }
-                else if(event.key.keysym.sym == SDLK_DOWN)
-                {
-                    MoveCursorDown(&textSeq);
-                }
-#if 0
-                else if(event.key.keysym.sym == SDLK_LALT)
-                {
-                    copyStartIndex = textSeq.preEndIndex;
-                }
-                else if(event.key.keysym.sym == SDLK_c && ctrlDown)
-                {
-                    printf("copy\n");
-                    if(textSeq.preEndIndex > copyStartIndex)
+                    if(textBuffer.lines[textBuffer.currentLine].preSize > 0)
                     {
-                        u32 size = textSeq.preEndIndex - copyStartIndex;
-                        u8 *copiedText = (u8*)malloc(size + 1); //+1 for null character
-                        
-                        for(u32 n = 0; n < size; n++)
-                        {
-                            copiedText[n] = textSeq.buffer[n + copyStartIndex + 1];
-                        }
-                        copiedText[size] = 0;
-                        
-                        printf("copied:\n'%s'\n", copiedText);
-                        SDL_SetClipboardText(copiedText);
-                        free(copiedText);
+                        MoveCursorLeft(&textBuffer.lines[textBuffer.currentLine]);
                     }
                     else
                     {
-                        u32 size = copyStartIndex - textSeq.preEndIndex;
-                        u8 *copiedText = (u8*)malloc(size + 1); //+1 for null character
+                        MoveCursorUpGlobal(&textBuffer);
                         
-                        for(u32 n = 0; n < size; n++)
+                        while(textBuffer.lines[textBuffer.currentLine].postSize > 0)
                         {
-                            copiedText[n] = textSeq.buffer[n + textSeq.preSize];
+                            MoveCursorRight(&textBuffer.lines[textBuffer.currentLine]);
                         }
-                        copiedText[size] = 0;
-                        
-                        printf("copied:\n'%s'\n", copiedText);
-                        SDL_SetClipboardText(copiedText);
-                        free(copiedText);
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_v && ctrlDown)
+                else if(event.key.keysym.sym == SDLK_RIGHT)
                 {
-                    printf("paste\n");
-                    u8 *textToPaste = SDL_GetClipboardText();
-                    
-                    u32 n = 0;
-                    while(textToPaste[n] != 0)
+                    if(textBuffer.lines[textBuffer.currentLine].postSize > 0)
                     {
-                        InsertItem(&textSeq, textToPaste[n]);
-                        n++;
+                        MoveCursorRight(&textBuffer.lines[textBuffer.currentLine]);
+                    }
+                    else
+                    {
+                        MoveCursorDownGlobal(&textBuffer);
+                        
+                        while(textBuffer.lines[textBuffer.currentLine].preSize > 0)
+                        {
+                            MoveCursorLeft(&textBuffer.lines[textBuffer.currentLine]);
+                        }
                     }
                 }
-                else if(event.key.keysym.sym == SDLK_x && ctrlDown)
+                else if(event.key.keysym.sym == SDLK_UP)
                 {
-                    printf("cut\n");
+                    MoveCursorUpGlobal(&textBuffer);
                 }
-                else if(event.key.keysym.sym == SDLK_o && ctrlDown)
+                else if(event.key.keysym.sym == SDLK_DOWN)
                 {
-                    printf("open file\n");
+                    MoveCursorDownGlobal(&textBuffer);
                 }
-                else if(event.key.keysym.sym == SDLK_s && ctrlDown)
+                else if(leftCtrlDown)
                 {
-                    printf("save file\n");
+                    for(u32 n = 0; n < 100; n++)
+                    {
+                        MoveCursorDownGlobal(&textBuffer);
+                    }
+                    textBuffer.lowestLine = textBuffer.currentLine - (textBuffer.maxLinesVisible / 2); 
                 }
-                else if(event.key.keysym.sym == SDLK_n && ctrlDown)
+                else if(rightCtrlDown)
                 {
-                    printf("new file\n");
+                    for(u32 n = 0; n < 100; n++)
+                    {
+                        MoveCursorUpGlobal(&textBuffer);
+                    }
+                    textBuffer.lowestLine = textBuffer.currentLine - (textBuffer.maxLinesVisible / 2);
                 }
-#endif
                 break;
+                
                 case SDL_TEXTINPUT:
-                InsertItem(&textSeq, event.text.text[0]);
-                //printf("typed: %s\n", event.text.text);
+                InsertItem(&textBuffer.lines[textBuffer.currentLine], event.text.text[0]);
                 break;
                 
                 case SDL_WINDOWEVENT:
                 if((event.window.event == SDL_WINDOWEVENT_RESIZED) || (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED))
                 {
-                    
-                    i32 w, h;
+                    i32 w = 0, h = 0;
                     SDL_GetWindowSize(window, &w, &h);
                     printf("Window size changed to width : %d, height : %d\n", w, h);
                     
@@ -357,81 +429,69 @@ int main(int argc, char *argv[])
                     
                     displayBuffer.width = w;
                     displayBuffer.height = h;
+                    
+                    lineMargin.height = h;
+                    lineHighlight.width = w;
+                    
+                    textBuffer.maxLinesVisible = (h / caret.height) + 1;
                 }
                 break;
             }
         }
         
-        ClearBuffer(&displayBuffer, (Color){9, 13, 18, 255});
+        //scrolling by changing lowest visible line number
+        if(textBuffer.currentLine >= (textBuffer.lowestLine + textBuffer.maxLinesVisible - 1))
+        {
+            textBuffer.lowestLine++;
+        }
+        else if(textBuffer.currentLine < textBuffer.lowestLine)
+        {
+            textBuffer.lowestLine--;
+        }
         
-        //NOTE(abhicv): calculating caret x position, active line number, total no. of lines
+        u32 highestLineNumber = (textBuffer.capacity - textBuffer.postSize) + (textBuffer.maxLinesVisible - (textBuffer.currentLine - textBuffer.lowestLine));
+        highestLineNumber = highestLineNumber < (textBuffer.capacity - 1) ? highestLineNumber : (textBuffer.capacity - 1);
+        
+        //printf("pre: %d, post: %d, cl: %d, ll: %d, hl: %d, max line: %d, gap: %d\n", textBuffer.preSize, textBuffer.postSize, textBuffer.currentLine, textBuffer.lowestLine, highestLineNumber, textBuffer.maxLinesVisible, textBuffer.gapSize);
+        
+        u32 nDigits = 0;
+        u32 num = (textBuffer.lowestLine + textBuffer.maxLinesVisible);
+        
+        while(num)
+        {
+            num = num / 10;
+            nDigits++;
+        }
+        
+        lineMargin.width = 5 + nDigits * fontData->charDatas[(u32)('0')].xadvance;
+        
+        //caret position
         {
             caret.x = lineMargin.width;
-            caret.y = 0;
-            currentActiveLineNumber = 1;
-            numOfLines = 0;
-            
-            for(u32 n = 0; n < textSeq.preSize; n++)
+            for(u32 n = 0; n < textBuffer.lines[textBuffer.currentLine].preSize; n++)
             {
-                if(textSeq.buffer[n] == '\n')
+                u8 c = textBuffer.lines[textBuffer.currentLine].buffer[n];
+                
+                if(c == '\t') //tab
                 {
-                    caret.x = lineMargin.width;
-                    currentActiveLineNumber++;
-                    numOfLines++;
-                    caret.y += caret.height;
-                }
-                else if(textSeq.buffer[n] == '\t')
-                {
-                    i32 advance, lsb;
-                    stbtt_GetCodepointHMetrics(&fontData->fontInfo, '\t', &advance, &lsb);
-                    caret.x += 4 * roundf(advance * fontData->scale);
+                    caret.x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
                 }
                 else
                 {
-                    i32 advance, lsb;
-                    stbtt_GetCodepointHMetrics(&fontData->fontInfo, textSeq.buffer[n], &advance, &lsb);
-                    caret.x += roundf(advance * fontData->scale);
-                    caret.width = roundf(advance * fontData->scale);
+                    caret.x += fontData->charDatas[(u32)c].xadvance;
                 }
-                
-                if(n == copyStartIndex)
-                {
-                    copyPasteCaret.x = caret.x;
-                    copyPasteCaret.y = caret.y;
-                    copyPasteCaret.width = caret.width;
-                }
+                caret.width = fontData->charDatas[(u32)c].xadvance;
             }
-            
-            for(u32 n = (textSeq.bufferCapacity - textSeq.postSize); n < textSeq.bufferCapacity - 1; n++)
-            {
-                if(textSeq.buffer[n] == '\n')
-                {
-                    numOfLines++;
-                }
-            }
-            numOfLines++;
         }
         
-        //scrolling by changing lowest visible line number
-        if(currentActiveLineNumber > (lowestLineNumber + maxLinesDisplayable - 1))
-        {
-            lowestLineNumber++;
-        }
-        else if(currentActiveLineNumber < lowestLineNumber)
-        {
-            lowestLineNumber--;
-        }
-        
-        //caret y position
-        caret.y = lineMargin.y + (currentActiveLineNumber - lowestLineNumber) * caret.height;
+        caret.y = (textBuffer.currentLine - textBuffer.lowestLine) * caret.height;
         lineHighlight.y = caret.y;
         
         //Rendering
         {
-            //header
-            DrawRect(&displayBuffer, &header, (Color){49, 94, 104, 255});
+            ClearBuffer(&displayBuffer, (Color){9, 13, 18, 255});
             
-            //line margins
+            //line margin
             DrawRect(&displayBuffer, &lineMargin, (Color){26, 38, 52, 255});
             
             //line highlight
@@ -440,98 +500,95 @@ int main(int argc, char *argv[])
             //caret
             DrawRect(&displayBuffer, &caret, (Color){238, 232, 0, 255});
             
-            //copy paste caret
-            DrawRectWire(&displayBuffer, &copyPasteCaret, (Color){255, 255, 255, 255});
-            
-            //NOTE(abhicv): line numbers
+            //line numbers
             {
-                u32 p = lineMargin.y;
-                for(u32 n = lowestLineNumber; (n <= (maxLinesDisplayable + lowestLineNumber)) && (n <= numOfLines); n++)
+                u32 y = 0;
+                for(u32 n  = textBuffer.lowestLine; n < (textBuffer.lowestLine + textBuffer.maxLinesVisible); n++)
                 {
-                    char number[3] = {0, 0, 0};
-                    sprintf(&number[0], "%d\0", n);
-                    RenderText(&displayBuffer, &number[0], fontData, fontBitMaps, lineMargin.x + 1, p, 0, 2);
-                    p += fontData->lineGap + fontData->ascent - fontData->descent;
-                }
-            }
-            
-            u32 startIndex = 0;
-            u32 endIndex = 0;
-            
-            u32 highestLineNumber = lowestLineNumber + maxLinesDisplayable;
-            
-            //NOTE(abhicv): calculating start and end index from lowestLineNumber and highestLineNumber
-            {
-                u32 cl = currentActiveLineNumber;
-                
-                if(textSeq.preSize > 0)
-                {
-                    for(u32 n = textSeq.preSize - 1; n > 0; n--)
+                    u32 nDigits = 0;
+                    u32 num = n + 1;
+                    
+                    while(num)
                     {
-                        if(textSeq.buffer[n] == '\n')
-                        {
-                            cl--;
-                            if(cl == (lowestLineNumber - 1))
-                            {
-                                startIndex = n + 1;
-                                break;
-                            }
-                        }
+                        num = num / 10;
+                        nDigits++;
                     }
-                }
-                
-                cl = currentActiveLineNumber - 1;
-                
-                if(textSeq.postSize > 0)
-                {
-                    for(u32 n = (textSeq.bufferCapacity - textSeq.postSize); n < textSeq.bufferCapacity; n++)
-                    {
-                        if(textSeq.buffer[n] == '\n' || (n == (textSeq.bufferCapacity - 1)))
-                        {
-                            cl++;
-                            if(cl == highestLineNumber || cl == numOfLines)
-                            {
-                                endIndex = n;
-                                break;
-                            }
-                        }
-                    }
+                    
+                    u8 *lineNumText = (u8*)malloc(nDigits);
+                    sprintf(lineNumText, "%d", n + 1);
+                    RenderText(&displayBuffer, lineNumText, nDigits, fontData, 0, y, (Color){255, 255, 255, 255});
+                    free(lineNumText);
+                    y += fontData->lineHeight;
                 }
             }
             
-            //printf("si: %d, ei: %d, pre: %d, post: %d, ll: %d, hl: %d, nl: %d\n", startIndex, endIndex, textSeq.preSize, textSeq.postSize, lowestLineNumber, highestLineNumber, numOfLines);
-            
-            //syntax highlighting
-            u32 totalSize = textSeq.preSize + textSeq.postSize;
-            
-            u8* colorIndexBuffer = (u8*)malloc(totalSize);
-            memset(colorIndexBuffer, 3, totalSize);
-            
-            u8* textBuffer = (u8*)malloc(totalSize);
-            memset(textBuffer, 0, totalSize);
-            
-            memcpy(textBuffer, textSeq.buffer, textSeq.preSize);
-            
-            if(textSeq.postSize > 0)
+            //lowestLineNumber to preSize
+            u32 y = 0;
+            for(u32 n = textBuffer.lowestLine; n < textBuffer.preSize; n++)
             {
-                memcpy(textBuffer + textSeq.preSize, textSeq.buffer + (textSeq.bufferCapacity - textSeq.postSize), textSeq.postSize);
+                TextSequence *tSeq = &textBuffer.lines[n];
+                
+                u32 size = tSeq->preSize + tSeq->postSize;
+                u8* text = (u8*)malloc(size);
+                
+                memset(tSeq->colorIndexBuffer, 3, size);
+                memcpy(text, tSeq->buffer, tSeq->preSize);
+                
+                if(tSeq->postSize > 0)
+                {
+                    memcpy(text + tSeq->preSize, tSeq->buffer + (tSeq->bufferCapacity - tSeq->postSize), tSeq->postSize);
+                }
+                
+                Lexer(text, size, tSeq->colorIndexBuffer, size);
+                
+                b32 activeLine = (n == textBuffer.currentLine) ? true : false;
+                RenderTextSequence(&displayBuffer, tSeq, fontData, lineMargin.width, y, activeLine);
+                y += fontData->lineHeight;
+                
+                free(text);
             }
             
-            //Lexical analysis to fint ketwords and strings and fill colorIndexbuffer
-            Lexer(textBuffer, totalSize, colorIndexBuffer, totalSize);
+            //postIndex to highestLineNumber
+            if(textBuffer.postSize > 0)
+            {
+                for(u32 n = (textBuffer.capacity - textBuffer.postSize); n <= highestLineNumber; n++)
+                {
+                    TextSequence *tSeq = &textBuffer.lines[n];
+                    
+                    u32 size = tSeq->preSize + tSeq->postSize;
+                    u8* text = (u8*)malloc(size);
+                    
+                    memset(tSeq->colorIndexBuffer, 3, size);
+                    memcpy(text, tSeq->buffer, tSeq->preSize);
+                    
+                    if(tSeq->postSize > 0)
+                    {
+                        memcpy(text+ tSeq->preSize, tSeq->buffer + (tSeq->bufferCapacity - tSeq->postSize), tSeq->postSize);
+                    }
+                    
+                    Lexer(text, size, tSeq->colorIndexBuffer, size);
+                    
+                    b32 activeLine = (n == textBuffer.currentLine) ? true : false;
+                    RenderTextSequence(&displayBuffer, tSeq, fontData, lineMargin.width, y, activeLine);
+                    y += fontData->lineHeight;
+                    
+                    free(text);
+                }
+            }
             
-            RenderTextBuffer(&displayBuffer, &textSeq, fontData, fontBitMaps, colorIndexBuffer, lineMargin.width, lineMargin.y, startIndex, endIndex);
-            
-            free(colorIndexBuffer);
-            free(textBuffer);
+            //fps meter
+            u8 fpsText[10] = {0};
+            sprintf(fpsText, "%0.0f fps", frames * 1000.0f / (SDL_GetTicks()));
+            RenderText(&displayBuffer, fpsText, 10, fontData, displayBuffer.width - 100, 0, (Color){255, 255, 255, 255});
             
             SDL_UpdateTexture(texture, NULL, displayBuffer.data, 4 * displayBuffer.width);
             SDL_RenderClear(renderer);
             SDL_RenderCopy(renderer, texture, NULL, NULL);
             SDL_RenderPresent(renderer);
+            
+            frames++;
         }
     }
-    SDL_DestroyTexture(texture);
     
     SDL_Quit();
     return 0;
