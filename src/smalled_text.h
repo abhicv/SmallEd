@@ -1,6 +1,9 @@
 #ifndef SMALLED_TEXT_H
 #define SMALLED_TEXT_H
 
+#include "types.h"
+#include "smalled_memory.h"
+
 typedef struct TextSequence
 {
     u8 *buffer;
@@ -11,19 +14,39 @@ typedef struct TextSequence
     
     u32 bufferCapacity;
     
+    //for syntax highlighting
     u8* colorIndexBuffer;
     
 } TextSequence;
 
-void InsertItem(TextSequence *tSeq, u8 item);
+typedef struct TextBuffer
+{
+    TextSequence *lines;
+    
+    u32 preSize;
+    u32 postSize;
+    u32 gapSize;
+    u32 capacity;
+    
+    u32 currentLine;
+    u32 lowestLine;
+    u32 maxLinesVisible;
+    
+} TextBuffer;
+
+void InsertItem(TextSequence *tSeq, u8 character);
 void DeleteItem(TextSequence *tSeq);
 
-//cursor movement
-void MoveCursorLeft(TextSequence *tSeq);
-void MoveCursorRight(TextSequence *tSeq);
-void MoveCursorUp(TextSequence *tSeq);
-void MoveCursorDown(TextSequence *tSeq);
+void MoveCursorLeftLocal(TextSequence *tSeq);
+void MoveCursorRightLocal(TextSequence *tSeq);
 
-#define TEXT_BUFFER_SIZE 10 * 1024 * 1024
+void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *textBuffer);
+
+void InsertLine(TextBuffer *textBuffer);
+void DeleteLine(TextBuffer *textBuffer);
+void MoveCursorUp(TextBuffer *textBuffer);
+void MoveCursorDown(TextBuffer *textBuffer);
+void MoveCursorRight(TextBuffer *textBuffer);
+void MoveCursorLeft(TextBuffer *textBuffer);
 
 #endif //SMALLED_TEXT_H

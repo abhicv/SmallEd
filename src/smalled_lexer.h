@@ -95,38 +95,54 @@ global u8* C_keywords[] = {
 };
 
 global Color ColorLookUpTable[] = {
-    {216, 105, 19, 255}, //keywords
-    {196, 234, 93, 255}, //strings
-    {196, 234, 93, 255}, //numbers
-    {200, 200, 200, 255}, //default 
-    {32, 236, 240, 255}, //comments
+    {249, 255, 250, 255}, //keywords
+    {77, 191, 184, 255}, //strings
+    {77, 191, 184, 255}, //numbers
+    {204, 190, 164, 255}, //default 
+    {78, 189, 71, 255}, //comments
 };
 
-//creating string from a char buffer
-u8* CreateStringFromCharBuffer(const u8* charBuffer, u32 startIndex, u32 size)
+void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorIndexBufferSize, b32 *multiCommentLine)
 {
-    u8* str = (u8*)malloc(size + 1);
-    u32 endIndex = startIndex + size;
+    u32 keyWordCount = sizeof(C_keywords) / sizeof(u8*);
     
-    u32 m = 0;
-    for(u32 n = startIndex; n < endIndex; n++)
+    //for multi line comment
+    if(bufferSize >= 2)
     {
-        str[m] = charBuffer[n];
-        m++;
+        if((buffer[0] == '/' && buffer[1] == '*'))
+        {
+            *multiCommentLine = true;
+        }
+        
+        if(*multiCommentLine)
+        {
+            if((buffer[bufferSize - 2] == '*' && buffer[bufferSize - 1] == '/'))
+            {
+                for(u32 n = 0; n < bufferSize; n++)
+                {
+                    colorIndexBuffer[n] = 4;
+                }
+                
+                *multiCommentLine = false;
+            }
+            else
+            {
+                for(u32 n = 0; n < bufferSize; n++)
+                {
+                    colorIndexBuffer[n] = 4;
+                }
+            }
+            return;
+        }
     }
-    str[size] = 0;
     
-    return str;
-}
-
-void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorIndexBufferSize)
-{
     for(u32 n = 0; n < bufferSize; n++)
     {
+        colorIndexBuffer[n] = 3;
+        
         if(ALPHA_CHAR(buffer[n])) //keywords
         {
-            u32 keyWordListSize = sizeof(C_keywords) / sizeof(u8*);
-            for(u32 m = 0; m < keyWordListSize; m++)
+            for(u32 m = 0; m < keyWordCount; m++)
             {
                 if(MatchString(buffer, bufferSize, &n, C_keywords[m], strlen(C_keywords[m])))
                 {
@@ -170,23 +186,27 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
         }
         else if(NUMBER_CHAR(buffer[n])) //numbers
         {
-            if(n > 2 && n < (bufferSize - 2))
+            if(n > 1)
             {
-                b32 isHexNum = NUMBER_CHAR(buffer[n - 2]) && buffer[n - 1] == 'x' && NUMBER_CHAR(buffer[n - 2]);
-                b32 isFloatNum = NUMBER_CHAR(buffer[n - 2]) && buffer[n - 1] == '.' && NUMBER_CHAR(buffer[n - 2]);
-                b32 isNum = !ALPHA_CHAR(buffer[n - 1]) && NUMBER_CHAR(buffer[n]) && !ALPHA_CHAR(buffer[n + 1]);
-                
-                if(isHexNum || isFloatNum)
+                if(!ALPHA_CHAR(buffer[n - 1]))
                 {
-                    colorIndexBuffer[n - 1] = 2;
-                    colorIndexBuffer[n] = 2;
+                    while(NUMBER_CHAR(buffer[n]))
+                    {
+                        colorIndexBuffer[n] = 2;
+                        n++;
+                    }
                 }
-                else if(isNum)
+                else
                 {
-                    colorIndexBuffer[n] = 2;
+                    while(NUMBER_CHAR(buffer[n]))
+                    {
+                        colorIndexBuffer[n] = 3;
+                        n++;
+                    }
                 }
             }
         }
+        
         else if(buffer[n] == '\'' && buffer[n + 2] == '\'') //single character
         {
             colorIndexBuffer[n] = 2;
@@ -210,11 +230,6 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
                 colorIndexBuffer[i] = 4;
             }
         }
-        else
-        {
-            colorIndexBuffer[n] = 3; 
-        }
     }
 }
-
 #endif //LEXER_H
