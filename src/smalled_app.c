@@ -1,29 +1,33 @@
+// NOTE(abhicv): Smalled is a text editor with less complexity and functionality
+// A Text Sequence is a gap buffer of ascii characters.
+// Each text sequence is a line.
+// A text buffer is gap buffer of text sequences(array of lines).
+// Each line can have upto 2 * 1024 ascii characters, if need more can be allocated on demand(Memory allocations are to be kept minimum).
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+//for windowing, input and rendering
 #include <SDL2/SDL.h>
 
+//for windows file IO
 #include "Windows.h"
 
+//common type defs
 #include "types.h"
 
 #include "smalled_font.c"
 #include "smalled_text.c"
 #include "smalled_file.c"
 #include "smalled_render.c"
-#include "smalled_lexer.h"
-#include "smalled_memory.h"
+#include "smalled_lexer.c"
 #include "smalled_editor.c"
+
+#include "smalled_memory.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
-
-// NOTE(abhicv): How it works
-// A Text Sequence is a gap buffer of ascii characters.
-// Each text sequence is a line.
-// A text buffer is gap buffer of text sequences(array of lines).
-// Each line can have upto 2 * 1024 ascii characters, if need more can be allocated on demand(Memory allocations are to be kept minimum).
 
 int main(int argc, char *argv[])
 {
@@ -56,7 +60,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     
-    
+    //memory for data living forever(upto end of the program)
     Memory memory = {0};
     memory.permanentStorageSize = MegaByte(64);
     memory.permanentStorage = VirtualAlloc(0, memory.permanentStorageSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -85,10 +89,9 @@ int main(int argc, char *argv[])
     editor.gotoLineTSeq.postSize = 0;
     editor.gotoLineTSeq.gapSize = 120;
     
-    
     //reading a file and breaking into lines
-    //char *fileName = "../STB/stb_truetype.h";
-    char *fileName = "test.c";
+    char *fileName = "E:/Development/SmallEd/STB/stb_truetype.h\0";
+    //char *fileName = "checker.c\0";
     
     //file name as cmd line argument
     if(argc > 1)
@@ -102,8 +105,12 @@ int main(int argc, char *argv[])
     {
         u32 nLines = GetLineCount(file.buffer, file.size);
         
+        printf("line count: %d\n", nLines);
+        
         TextBuffer textBuffer = {0};
-        textBuffer.capacity = nLines * 2;
+        
+        textBuffer.capacity = 2 * nLines;
+        
         textBuffer.lines = (TextSequence*)malloc(sizeof(TextSequence) * textBuffer.capacity);
         textBuffer.lowestLine = 0;
         textBuffer.currentLine = 0;
@@ -113,13 +120,17 @@ int main(int argc, char *argv[])
         
         BreakFileIntoLines(file.buffer, file.size, nLines, &textBuffer);
         editor.textBuffer = textBuffer;
+        
         editor.fileName = fileName;
     }
     
     free(file.buffer);
+    file.buffer = NULL;
     
+    editor.mode = EDITOR_MODE_ENTRY;
     b32 quit = false;
     
+    //for fps calculation
     u64 frames = 0;
     
     SDL_Event event = {0};
@@ -132,13 +143,6 @@ int main(int argc, char *argv[])
             {
                 case SDL_QUIT:
                 quit = true;
-                break;
-                
-                case SDL_KEYDOWN:
-                if(event.key.keysym.sym == SDLK_ESCAPE)
-                {
-                    quit = true;
-                }
                 break;
                 
                 case SDL_WINDOWEVENT:
@@ -160,16 +164,18 @@ int main(int argc, char *argv[])
                 }
                 break;
             }
-            
             EditorSpaceEvent(&event, &editor);
         }
         
-        RenderEditor(&renderBuffer, fontData, &editor);
+        ClearBuffer(&renderBuffer, (Color){4, 35, 40, 255});
+        RenderSpace(&renderBuffer, fontData, &editor);
         
+#if 1
         //DEBUG: fps meter
         u8 fpsText[10] = {0};
         sprintf(fpsText, "%0.0f fps\0", frames * 1000.0f / SDL_GetTicks());
         RenderText(&renderBuffer, fpsText, strlen(fpsText), fontData, renderBuffer.width - 100, 0, (Color){10, 10, 10, 255});
+#endif
         
         SDL_UpdateTexture(texture, NULL, renderBuffer.data, 4 * renderBuffer.width);
         SDL_RenderClear(renderer);

@@ -2,7 +2,8 @@
 #define SMALLED_FONT_H
 
 #define STB_TRUETYPE_IMPLEMENTATION
-#include "stb_truetype.h"
+
+#include <stb_truetype.h>
 
 #include "types.h"
 
@@ -12,6 +13,9 @@
 #include "smalled_text.h"
 #include "smalled_memory.h"
 
+#define RENDERABLE_CHAR(c) ((c >= 32) && (c <= 126)) 
+
+//8-bit single channel bitmap
 typedef struct BitMap
 {
     u8 *pixels;
@@ -34,12 +38,5 @@ typedef struct FontData
     u32 lineHeight;
     
 } FontData;
-
-FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize);
-
-Color BlendPixel(Color dst, Color src, Color color);
-Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y);
-void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap, Rect *srcRect, Color color);
-u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontData, u32 xPos, u32 yPos, Color color);
 
 #endif //SMALLED_FONT_H

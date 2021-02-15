@@ -12,7 +12,6 @@ void InsertItem(TextSequence *tSeq, u8 character)
     else
     {
         //TODO(abhicv): resize text buffer to create new gap
-        
     }
 }
 
@@ -53,8 +52,19 @@ void MoveCursorRightLocal(TextSequence *tSeq)
     }
 }
 
-//text buffer
+void SeekCursorLeft(TextSequence *tSeq, u32 steps)
+{
+    
+}
 
+void SeekCursorRight(TextSequence *tSeq, u32 steps)
+{
+    
+}
+
+#define MAX_LINE_SIZE_KB 100 
+
+//text buffer
 //loading text file as lines into the text buffer 
 void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *textBuffer)
 {
@@ -70,7 +80,7 @@ void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *te
             {
                 TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
                 
-                tSeq->bufferCapacity = KiloByte(2);
+                tSeq->bufferCapacity = KiloByte(MAX_LINE_SIZE_KB);
                 tSeq->buffer = (u8*)malloc(tSeq->bufferCapacity);
                 tSeq->colorIndexBuffer = (u8*)malloc(tSeq->bufferCapacity);
                 tSeq->preSize = 0;
@@ -90,7 +100,7 @@ void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *te
                     nCharInLine = 1;
                 }
                 
-                tSeq->bufferCapacity = KiloByte(2);
+                tSeq->bufferCapacity = KiloByte(MAX_LINE_SIZE_KB);
                 tSeq->buffer = (u8*)malloc(tSeq->bufferCapacity);
                 tSeq->colorIndexBuffer = (u8*)malloc(tSeq->bufferCapacity);
                 tSeq->preSize = 0;
@@ -241,3 +251,37 @@ void MoveCursorLeft(TextBuffer *textBuffer)
         }
     }
 }
+
+void GotoLine(TextBuffer *textBuffer, u32 lineNum)
+{
+    u32 totalLineCount = (textBuffer->preSize + textBuffer->postSize);
+    lineNum = lineNum > totalLineCount ? totalLineCount : lineNum;
+    lineNum = lineNum > 0 ? lineNum : 1;
+    
+    if(lineNum > (textBuffer->currentLine + 1))
+    {
+        while(textBuffer->preSize < lineNum)
+        {
+            MoveCursorDown(textBuffer);
+        }
+    }
+    else
+    {
+        while(textBuffer->preSize > lineNum)
+        {
+            MoveCursorUp(textBuffer);
+        }
+    }
+    
+    u32 half = (textBuffer->maxLinesVisible / 2);
+    
+    if(lineNum < half)
+    {
+        textBuffer->lowestLine = 0;
+    }
+    else
+    {
+        textBuffer->lowestLine = lineNum - half;
+    }
+}
+

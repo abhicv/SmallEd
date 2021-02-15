@@ -32,6 +32,7 @@ FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize)
     
     float s = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, 1) / stbtt_ScaleForPixelHeight(&fontData->fontInfo, 1);
     
+    //TODO(abhicv): resize atlas bitmap if defualt dimensions not suitable
     fontData->atlasBitMap.width = 512;
     fontData->atlasBitMap.height = 512;
     fontData->atlasBitMap.pixels = (u8*)malloc(fontData->atlasBitMap.width * fontData->atlasBitMap.height);
@@ -92,7 +93,7 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
             u32 cX = srcRect->x;
             for(u32 x = destRect->x; x < (destRect->x + destRect->width); x++)
             {
-                if(x >= 0 && y >=0 && x < renderBuffer->width && y < renderBuffer->height)
+                if(x >= 0 && y >= 0 && x < renderBuffer->width && y < renderBuffer->height)
                 {
                     u8 alpha = atlasBitMap->pixels[cX + cY * atlasBitMap->width];
                     
@@ -101,9 +102,9 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
                     Color blendColor = BlendPixel(dst, src, color);
                     
                     renderBuffer->data[x + y * renderBuffer->width] = 
-                        (blendColor.r << 24) | 
-                        (blendColor.g << 16) | 
-                        (blendColor.b << 8) | 
+                        (blendColor.r << 24) |
+                        (blendColor.g << 16) |
+                        (blendColor.b << 8) |
                         (blendColor.a  << 0);
                 }
                 cX++;
@@ -126,7 +127,7 @@ u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontDat
         {
             x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
         }
-        else
+        else if(RENDERABLE_CHAR(c))
         {
             Rect srcRect = {0};
             srcRect.x = fontData->charDatas[(u32)c].x0;
@@ -143,6 +144,10 @@ u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontDat
             RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
             
             x += fontData->charDatas[(u32)c].xadvance;
+        }
+        else
+        {
+            x += fontData->charDatas[(u32)(' ')].xadvance;
         }
     }
     
@@ -167,7 +172,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
         {
             x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
         }
-        else
+        else if(RENDERABLE_CHAR(c))
         {
             Rect srcRect = {0};
             srcRect.x = fontData->charDatas[(u32)c].x0;
@@ -186,6 +191,17 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
             RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
             
             x += fontData->charDatas[(u32)c].xadvance;
+            
+            if(i < (tSeq->preSize - 2))
+            {
+                f32 scale = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, fontData->fontSize);
+                x += scale * stbtt_GetCodepointKernAdvance(&fontData->fontInfo, c, tSeq->buffer[i + 1]);
+            }
+            
+        }
+        else
+        {
+            x += fontData->charDatas[(u32)(' ')].xadvance;
         }
         
         colorIndex++;
@@ -194,7 +210,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
     //from postStartIndex to buffer end
     if(tSeq->postSize > 0)
     {
-        u32 postStartIndex = (tSeq->bufferCapacity - tSeq->postSize);
+        u32 postStartIndex = tSeq->bufferCapacity - tSeq->postSize;
         
         for(u32 i = postStartIndex; i < tSeq->bufferCapacity; i++)
         {
@@ -204,7 +220,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
             {
                 x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
             }
-            else
+            else if(RENDERABLE_CHAR(c))
             {
                 Rect srcRect = {0};
                 srcRect.x = fontData->charDatas[(u32)c].x0;
@@ -228,12 +244,22 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
                 RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
                 
                 x += fontData->charDatas[(u32)c].xadvance;
+                
+                if(i < (tSeq->bufferCapacity - 2))
+                {
+                    f32 scale = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, fontData->fontSize);
+                    x += scale * stbtt_GetCodepointKernAdvance(&fontData->fontInfo, c, tSeq->buffer[i + 1]);
+                }
+                
+            }
+            else
+            {
+                x += fontData->charDatas[(u32)(' ')].xadvance;
             }
             colorIndex++;
         }
     }
 }
-
 
 void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq, 
                               FontData *fontData, 
@@ -251,7 +277,7 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
         {
             x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
         }
-        else
+        else if(RENDERABLE_CHAR(c))
         {
             Rect srcRect = {0};
             srcRect.x = fontData->charDatas[(u32)c].x0;
@@ -269,6 +295,10 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
             
             x += fontData->charDatas[(u32)c].xadvance;
         }
+        else
+        {
+            x += fontData->charDatas[(u32)(' ')].xadvance;
+        }
     }
     
     //from postStartIndex to buffer end
@@ -284,7 +314,7 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
             {
                 x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
             }
-            else
+            else if(RENDERABLE_CHAR(c))
             {
                 Rect srcRect = {0};
                 srcRect.x = fontData->charDatas[(u32)c].x0;
@@ -301,6 +331,10 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
                 RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
                 
                 x += fontData->charDatas[(u32)c].xadvance;
+            }
+            else
+            {
+                x += fontData->charDatas[(u32)(' ')].xadvance;
             }
         }
     }

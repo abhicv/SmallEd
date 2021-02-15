@@ -5,7 +5,7 @@ set sdl2_inlcude= /I..\SDL2\include\
 set smalled_src= /I..\src\
 set stb_include= /I..\STB\
 
-set exec=smalled_app.exe
+set exec= smalled_app.exe
 
 if not exist bin mkdir bin
 pushd bin
@@ -13,7 +13,7 @@ pushd bin
 if exist %exec% del %exec%
 
 rc /r /nologo smalled.rc
-cl /Zi /nologo ..\src\smalled_app.c %sdl2_inlcude% %smalled_src% %stb_include% /link smalled.res /incremental:no /subsystem:console /libpath:..\SDL2\lib\x64 %lflags%
+cl /nologo /O2 ..\src\smalled_app.c %sdl2_inlcude% %smalled_src% %stb_include% /link smalled.res /incremental:no /subsystem:console /libpath:..\SDL2\lib\x64 %lflags%
 
 if exist %exec% %exec%
 

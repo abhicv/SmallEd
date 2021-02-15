@@ -38,7 +38,7 @@ File ReadFileFromDisk(const u8 *fileName)
         }
         else
         {
-            printf("error reading bytes from '%s'\n", fileName);
+            fprintf(stderr, "error reading bytes from '%s'\n", fileName);
             
             free(file.buffer);
             file.loaded = false;
@@ -54,7 +54,7 @@ File ReadFileFromDisk(const u8 *fileName)
     }
     else
     {
-        printf("Failed to open the file '%s'\n", fileName);
+        fprintf(stderr, "Failed to open the file '%s'\n", fileName);
         file.loaded = false;
         return file;
     }
@@ -76,41 +76,24 @@ u32 GetLineCount(u8 *fileBuffer, u32 size)
     return lineCount;
 }
 
-void FileLister()
+void ListFileInDirectory(FileList *fileList)
 {
-    WIN32_FIND_DATAA winFindData = {0};
+    u32 n = 0;
     
-    u8 buffer[250];
-    GetCurrentDirectory(250, buffer);
+    fileList->fileCount = 0;
+    fileList->selectedIndex = 2;
     
-    HANDLE searchHnd = FindFirstFileA("../../../*", &winFindData);
+    HANDLE searchHnd = FindFirstFileA("*", &fileList->fileDatas[n]);
     
     if(searchHnd != INVALID_HANDLE_VALUE)
     {
-        if(winFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        do
         {
-            // directory
-            printf("dir: %s/\n", winFindData.cFileName);
+            n++;
         }
-        else
-        {
-            // file
-            printf("file: %s\n", winFindData.cFileName);
-        }
+        while(FindNextFileA(searchHnd, &fileList->fileDatas[n]) && n < 100);
         
-        while(FindNextFileA(searchHnd, &winFindData))
-        {
-            if(winFindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            {
-                // directory
-                printf("dir: %s/\n", winFindData.cFileName);
-            }
-            else
-            {
-                // file
-                printf("file: %s\n", winFindData.cFileName);
-            }
-        }
+        fileList->fileCount = n;
     }
     
     FindClose(searchHnd);

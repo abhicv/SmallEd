@@ -4,6 +4,7 @@
 #include <SDL2/SDL.h>
 
 #include "smalled_render.h"
+#include "smalled_font.h"
 #include "smalled_text.h"
 
 #include "types.h"
@@ -14,13 +15,21 @@ typedef struct Editor
     Rect rect;
     
     u8 *fileName;
-    b32 gotoLine;
+    
     TextSequence gotoLineTSeq;
+    
+    u32 mode;
+    
+    FileList fileList;
     
 } Editor;
 
-u32 DigitCount(u32 n);
-void EditorSpaceEvent(SDL_Event *event, Editor *editor);
-void RenderEditor(Buffer *renderBuffer, FontData *fontData, Editor *editor);
+enum EditorMode
+{
+    EDITOR_MODE_GOTO_LINE,
+    EDITOR_MODE_FILE_LIST,
+    EDITOR_MODE_EDIT,
+    EDITOR_MODE_ENTRY,
+};
 
 #endif //SMALLED_EDITOR_H

@@ -17,8 +17,11 @@ typedef struct File
 
 typedef struct FileList
 {
-    u8 *currentDir;
-    u8 *fileNameBuffer[200];
+    //can list upto 100 files
+    WIN32_FIND_DATAA fileDatas[100];
+    u32 fileCount;
+    u32 selectedIndex;
+    u8 currentDir[250];
     
 } FileList;
 
