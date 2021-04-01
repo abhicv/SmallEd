@@ -1,10 +1,51 @@
-#ifndef LEXER_H
-#define LEXER_H
+#ifndef SED_LEXER_H
+#define SED_LEXER_H
 
-#include "types.h"
+#include "sed_types.h"
 
 #define ALPHA_CHAR(c) ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
 #define NUMBER_CHAR(c) (c >= '0' && c <= '9')
+#define WHITESPACE(c) (c == ' ') || (c == '\n') || (c == '\r')
+
+#define KEYWORD_LIST(x) x##_keywords
+
+global u8* PY_keywords[] = {
+    "False\0",
+    "await\0",
+    "else\0",
+    "import\0",
+    "pass\0",
+    "None\0",
+    "break\0",
+    "except\0",
+    "in\0",
+    "raise\0",
+    "True\0",
+    "class\0",
+    "finally\0",
+    "is\0",
+    "return\0",
+    "and\0",
+    "continue\0",
+    "for\0",
+    "lambda\0",
+    "try\0",
+    "as\0",
+    "def\0",
+    "from\0",
+    "nonlocal\0",
+    "while\0",
+    "assert\0",
+    "del\0",
+    "global\0",
+    "not\0",
+    "with\0",
+    "async\0",
+    "elif\0",
+    "if\0",
+    "or\0",
+    "yield\0"
+};
 
 global u8* C_keywords[] = {
     "auto\0",
@@ -54,7 +95,7 @@ global u8* C_keywords[] = {
 };
 
 global Color ColorLookUpTable[] = {
-    {249, 255, 250, 255}, //keywords
+    {255, 255, 255, 255}, //keywords
     {77, 191, 184, 255}, //strings
     {77, 191, 184, 255}, //numbers
     {204, 190, 164, 255}, //default text 
@@ -70,4 +111,4 @@ enum ColorIndex
     COLOR_INDEX_COMMENT,
 };
 
-#endif //LEXER_H
+#endif //SED_LEXER_H

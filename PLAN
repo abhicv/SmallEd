@@ -1,0 +1,25 @@
+//KNOWN BUGS LIST
+1. Extra characters(new line) added at end of file while saving.
+
+//DONE
+[x] - basic text editing
+[x] - scrolling text edit area
+[x] - code syntax highlighting
+[x] - directory/file listing and listing UI
+[x] - goto line command
+[x] - loading, saving
+
+//TODO
+[] - copy paste texts(clipboard)
+[] - directory/file list UI scrolling
+[] - undo redo system
+[] - vertical and horizontal split editing spaces.
+[] - editor commmads and UI command list menu
+[] - config file parsing
+[] - theme file parsing
+[] - smooth scrolling
+[] - handle text buffer memory allocation(avoid use of malloc and realloc)
+
+//alternative implementation(never going to happen)
+[] - text buffer as split buffer(modified version of gap buffer), currently array of Gap buffers
+[] - text buffer as piece table(good redo undo system)

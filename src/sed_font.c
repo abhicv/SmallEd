@@ -1,9 +1,9 @@
-#include "smalled_font.h"
+#include "sed_font.h"
 
-FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize)
+FontData* LoadFont(const u8 *fontFileName, f32 fontSize)
 {
     FontData *fontData = 0;
-    fontData = (FontData*)AllocateMemory(memory, sizeof(FontData));
+    fontData = (FontData*)malloc(sizeof(FontData));
     
     FILE *fontFileHandle = fopen(fontFileName, "rb");
     if(fontFileHandle != NULL)
@@ -12,7 +12,7 @@ FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize)
         u32 size = ftell(fontFileHandle); 
         fseek(fontFileHandle, 0, SEEK_SET);
         
-        fontData->rawFontData = (u8*)AllocateMemory(memory, size);
+        fontData->rawFontData = (u8*)AllocatePersistentMemory(size);
         
         i32 readStatus = fread(fontData->rawFontData, 1, size, fontFileHandle);
         
@@ -35,7 +35,7 @@ FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize)
     //TODO(abhicv): resize atlas bitmap if defualt dimensions not suitable
     fontData->atlasBitMap.width = 512;
     fontData->atlasBitMap.height = 512;
-    fontData->atlasBitMap.pixels = (u8*)malloc(fontData->atlasBitMap.width * fontData->atlasBitMap.height);
+    fontData->atlasBitMap.pixels = (u8*)AllocatePersistentMemory(fontData->atlasBitMap.width * fontData->atlasBitMap.height);
     
     stbtt_BakeFontBitmap(fontData->rawFontData, 0, fontSize * s, fontData->atlasBitMap.pixels,
                          fontData->atlasBitMap.width, fontData->atlasBitMap.height, 0, 256, fontData->charDatas);
@@ -60,7 +60,7 @@ FontData* LoadFont(Memory *memory, const u8 *fontFileName, f32 fontSize)
     return fontData;
 }
 
-Color BlendPixel(Color dst, Color src, Color color) 
+Color BlendPixel(Color dst, Color src, Color color)
 {
     src.a = (src.a * color.a) >> 8;
     i32 ia = 0xff - src.a;
@@ -75,14 +75,14 @@ Color BlendPixel(Color dst, Color src, Color color)
 Color GetBufferPixelColor(Buffer *buffer, u32 x, u32 y)
 {
     Color color = {0};
-    color.r = (buffer->data[x + y * buffer->width] & 0xFF000000) >> 24;
-    color.g = (buffer->data[x + y * buffer->width] & 0x00FF0000) >> 16;
-    color.b = (buffer->data[x + y * buffer->width] & 0x0000FF00) >> 8;
-    color.a = (buffer->data[x + y * buffer->width] & 0x000000FF) >> 0;
+    color.r = (buffer->data[x + y * buffer->width] & 0x000000FF) >> 0;
+    color.g = (buffer->data[x + y * buffer->width] & 0x0000FF00) >> 8;
+    color.b = (buffer->data[x + y * buffer->width] & 0x00FF0000) >> 16;
+    color.a = (buffer->data[x + y * buffer->width] & 0xFF000000) >> 24;
     return color;
 }
 
-void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap, Rect *srcRect, Color color)
+void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap, Rect *srcRect, Color color, Rect clipRect)
 {
     if(renderBuffer != NULL && atlasBitMap != NULL)
     {
@@ -93,7 +93,7 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
             u32 cX = srcRect->x;
             for(u32 x = destRect->x; x < (destRect->x + destRect->width); x++)
             {
-                if(x >= 0 && y >= 0 && x < renderBuffer->width && y < renderBuffer->height)
+                if(x >= clipRect.x && y >= clipRect.y && x < (clipRect.x + clipRect.width) && y < (clipRect.y + clipRect.height))
                 {
                     u8 alpha = atlasBitMap->pixels[cX + cY * atlasBitMap->width];
                     
@@ -102,10 +102,7 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
                     Color blendColor = BlendPixel(dst, src, color);
                     
                     renderBuffer->data[x + y * renderBuffer->width] = 
-                        (blendColor.r << 24) |
-                        (blendColor.g << 16) |
-                        (blendColor.b << 8) |
-                        (blendColor.a  << 0);
+                        PACK_RGBA_INTO_U32(blendColor);
                 }
                 cX++;
             }
@@ -114,7 +111,7 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
     }
 }
 
-u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontData, u32 xPos, u32 yPos, Color color)
+u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontData, u32 xPos, u32 yPos, Color color, Rect clipRect)
 {
     u32 x = xPos;
     u32 y = yPos;
@@ -141,7 +138,7 @@ u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontDat
             destRect.width = srcRect.width;
             destRect.height = srcRect.height;
             
-            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color, clipRect);
             
             x += fontData->charDatas[(u32)c].xadvance;
         }
@@ -156,7 +153,7 @@ u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontDat
 
 void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq, 
                         FontData *fontData, 
-                        u32 xPos, u32 yPos, b32 activeTSeq)
+                        u32 xPos, u32 yPos, b32 activeTSeq, Rect clipRect)
 {
     u32 x = xPos;
     u32 y = yPos;
@@ -188,7 +185,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
             
             Color color = ColorLookUpTable[tSeq->colorIndexBuffer[colorIndex]];
             
-            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color, clipRect);
             
             x += fontData->charDatas[(u32)c].xadvance;
             
@@ -241,7 +238,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
                     color = (Color){0, 0, 0, 255};
                 }
                 
-                RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+                RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color, clipRect);
                 
                 x += fontData->charDatas[(u32)c].xadvance;
                 
@@ -250,7 +247,6 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
                     f32 scale = stbtt_ScaleForMappingEmToPixels(&fontData->fontInfo, fontData->fontSize);
                     x += scale * stbtt_GetCodepointKernAdvance(&fontData->fontInfo, c, tSeq->buffer[i + 1]);
                 }
-                
             }
             else
             {
@@ -263,7 +259,7 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
 
 void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq, 
                               FontData *fontData, 
-                              u32 xPos, u32 yPos, Color color)
+                              u32 xPos, u32 yPos, Color color, Rect clipRect)
 {
     u32 x = xPos;
     u32 y = yPos;
@@ -291,7 +287,7 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
             destRect.width = srcRect.width;
             destRect.height = srcRect.height;
             
-            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+            RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color, clipRect);
             
             x += fontData->charDatas[(u32)c].xadvance;
         }
@@ -328,7 +324,7 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
                 destRect.width = srcRect.width;
                 destRect.height = srcRect.height;
                 
-                RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color);
+                RenderFontBitMap(renderBuffer, &destRect, &fontData->atlasBitMap, &srcRect, color, clipRect);
                 
                 x += fontData->charDatas[(u32)c].xadvance;
             }

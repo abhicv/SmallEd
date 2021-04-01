@@ -13,6 +13,6 @@ pushd bin
 if exist %exec% del %exec%
 
 rc /r /nologo smalled.rc
-cl /nologo /Zi ..\src\sed_app.c %sdl2_inlcude% %smalled_src% %stb_include% /link smalled.res /incremental:no /subsystem:console /libpath:..\SDL2\lib\x64 %lflags%
+cl /nologo /O2 ..\src\sed_app.c %sdl2_inlcude% %smalled_src% %stb_include% /link smalled.res /incremental:no /subsystem:windows /libpath:..\SDL2\lib\x64 %lflags%
 
 popd bin

@@ -1,4 +1,4 @@
-#include "smalled_render.h"
+#include "sed_render.h"
 
 void ClearBuffer(Buffer *buffer, Color color)
 {
@@ -7,10 +7,7 @@ void ClearBuffer(Buffer *buffer, Color color)
         u32 n = 0;
         for(n = 0; n < buffer->height * buffer->width; n++)
         {
-            buffer->data[n] = (color.r << 24) 
-                | (color.g << 16)
-                | (color.b << 8) 
-                | (color.a << 0);
+            buffer->data[n] = PACK_RGBA_INTO_U32(color);
         }
     }
 }
@@ -26,10 +23,7 @@ void DrawRect(Buffer *buffer, Rect *rect, Color color)
             {
                 if(x >= 0 && y >= 0 && x < buffer->width && y < buffer->height)
                 {
-                    buffer->data[x + y * buffer->width] = (color.r << 24) 
-                        | (color.g << 16) 
-                        | (color.b << 8)
-                        | (color.a << 0);
+                    buffer->data[x + y * buffer->width] = PACK_RGBA_INTO_U32(color);
                 }
             }
         }
@@ -48,10 +42,7 @@ void DrawRectWire(Buffer *buffer, Rect *rect, Color color)
                 {
                     if(x == rect->x || y == rect->y || x == rect->x + rect->width - 1 || y == rect->y + rect->height - 1)
                     {
-                        buffer->data[x + y * buffer->width] = (color.r << 24) 
-                            | (color.g << 16) 
-                            | (color.b << 8) 
-                            | (color.a << 0);
+                        buffer->data[x + y * buffer->width] = PACK_RGBA_INTO_U32(color);
                     }
                 }
             }
@@ -73,10 +64,7 @@ void DrawCircle(Buffer *buffer, i32 xPos, i32 yPos, u32 radius, Color color)
                 {
                     if(distSqrt <= (radius * radius))
                     {
-                        buffer->data[x + y * buffer->width] = (color.r << 24) 
-                            | (color.g << 16) 
-                            | (color.b << 8) 
-                            | (color.a << 0);
+                        buffer->data[x + y * buffer->width] = PACK_RGBA_INTO_U32(color);
                     }
                 }
             }

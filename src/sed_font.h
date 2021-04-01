@@ -1,17 +1,15 @@
-#ifndef SMALLED_FONT_H
-#define SMALLED_FONT_H
+#ifndef SED_FONT_H
+#define SED_FONT_H
 
 #define STB_TRUETYPE_IMPLEMENTATION
-
 #include <stb_truetype.h>
 
-#include "types.h"
-
-#include "smalled_render.h"
-#include "smalled_debug.h"
-#include "smalled_lexer.h"
-#include "smalled_text.h"
-#include "smalled_memory.h"
+#include "sed_types.h"
+#include "sed_render.h"
+#include "sed_debug.h"
+#include "sed_lexer.h"
+#include "sed_text.h"
+#include "sed_memory.h"
 
 #define RENDERABLE_CHAR(c) ((c >= 32) && (c <= 126)) 
 
@@ -39,4 +37,4 @@ typedef struct FontData
     
 } FontData;
 
-#endif //SMALLED_FONT_H
+#endif //SED_FONT_H

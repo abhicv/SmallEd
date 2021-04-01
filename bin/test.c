@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <SDL2/SDL.h>
 
 #include "Windows.h"
@@ -36,6 +35,13 @@ since here lines are pointers to text sequence.
 or gap buffer of TextSequence pointers can also be made,so inserting new lines become trivial
 
 */
+
+typedef struct Entity
+{
+	u32 playerHealth;
+	u32 playerID;
+	u32 nWeapons;
+}
 
 typedef struct TextBuffer
 {
@@ -123,8 +129,8 @@ void InsertLine(TextBuffer *textBuffer)
     
     if(tSeq->postSize > 0)
     {
-        memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], 
-               &textBuffer->lines[textBuffer->currentLine].buffer[textBuffer->lines[textBuffer->currentLine].bufferCapacity - tSeq->postSize], 
+        memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize],
+               &textBuffer->lines[textBuffer->currentLine].buffer[textBuffer->lines[textBuffer->currentLine].bufferCapacity - tSeq->postSize],
                tSeq->postSize);
     }
     
@@ -203,7 +209,7 @@ void MoveCursorDownGlobal(TextBuffer *textBuffer)
     }
 }
 
-void RenderTextBuffer()
+void RenderTextBuffer(Buffer *renderBuffer)
 {
     
 }
@@ -403,7 +409,7 @@ int main(int argc, char *argv[])
                     {
                         MoveCursorDownGlobal(&textBuffer);
                     }
-                    textBuffer.lowestLine = textBuffer.currentLine - (textBuffer.maxLinesVisible / 2); 
+                    textBuffer.lowestLine = textBuffer.currentLine - (textBuffer.maxLinesVisible / 2);
                 }
                 else if(rightCtrlDown)
                 {
@@ -581,7 +587,7 @@ int main(int argc, char *argv[])
             
             //fps meter
             u8 fpsText[10] = {0};
-            sprintf(fpsText, "%0.0f fps", frames * 1000.0f / (SDL_GetTicks()));
+            sprintf(fpsText, "%0.0f fps",  frames * 1000.0f / (SDL_GetTicks()));
             RenderText(&displayBuffer, fpsText, 10, fontData, displayBuffer.width - 100, 0, (Color){255, 255, 255, 255});
             
             SDL_UpdateTexture(texture, NULL, displayBuffer.data, 4 * displayBuffer.width);
@@ -596,3 +602,4 @@ int main(int argc, char *argv[])
     SDL_Quit();
     return 0;
 }
+

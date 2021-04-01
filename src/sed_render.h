@@ -1,7 +1,9 @@
-#ifndef SMALLED_RENDER_H
-#define SMALLED_RENDER_H
+#ifndef SED_RENDER_H
+#define SED_RENDER_H
 
-#include "types.h"
+#include "sed_types.h"
+
+#define PACK_RGBA_INTO_U32(color) ((color.r << 0) | (color.g << 8) | (color.b << 16) | (color.a << 24))
 
 typedef struct Color
 {
@@ -35,4 +37,4 @@ void DrawRectWire(Buffer *buffer, Rect *rect, Color color);
 void DrawCircle(Buffer *buffer, i32 xPos, i32 yPos, u32 radius, Color color);
 void DrawRectRounded(Buffer *buffer, Rect *rect, u32 roundness, Color color);
 
-#endif //SMALLED_RENDER_H
+#endif //SED_RENDER_H

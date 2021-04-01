@@ -1,5 +1,5 @@
-#ifndef TYPES_H
-#define TYPES_H
+#ifndef SED_TYPES_H
+#define SED_TYPES_H
 
 #include <stdbool.h>
 
@@ -25,4 +25,4 @@ typedef double f64;
 #define global static        // global varibles
 #define local_persist static //static local variables
 
-#endif
+#endif //SED_TYPES_H

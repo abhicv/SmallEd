@@ -1,8 +1,8 @@
-#ifndef SMALLED_TEXT_H
-#define SMALLED_TEXT_H
+#ifndef SED_TEXT_H
+#define SED_TEXT_H
 
-#include "types.h"
-#include "smalled_memory.h"
+#include "sed_types.h"
+#include "sed_memory.h"
 
 //Gap buffer of u8(ascii character)
 typedef struct TextSequence
@@ -34,7 +34,18 @@ typedef struct TextBuffer
     u32 lowestLine;
     u32 maxLinesVisible;
     
+    b32 rlMoved; //check for left right cursor movement
+    u32 lastPreSize;
+    
+    b32 loaded;
 } TextBuffer;
+
+typedef struct LineInfo
+{
+    u32 lineStartIndex;
+    u32 lineSize; //num of characters in a line
+    
+} LineInfo;
 
 //text sequence
 void InsertItem(TextSequence *tSeq, u8 character);
@@ -42,8 +53,6 @@ void DeleteItem(TextSequence *tSeq);
 
 void MoveCursorLeftLocal(TextSequence *tSeq);
 void MoveCursorRightLocal(TextSequence *tSeq);
-
-void BreakFileIntoLines(u8 *fileBuffer, u32 fileSize, u32 nLines, TextBuffer *textBuffer);
 
 //text buffer 
 void InsertLine(TextBuffer *textBuffer);
@@ -54,4 +63,4 @@ void MoveCursorRight(TextBuffer *textBuffer);
 void MoveCursorLeft(TextBuffer *textBuffer);
 void GotoLine(TextBuffer *textBuffer, u32 lineNum);
 
-#endif //SMALLED_TEXT_H
+#endif //SED_TEXT_H

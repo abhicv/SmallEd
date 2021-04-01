@@ -1,26 +1,24 @@
-#include "smalled_lexer.h"
+#include "sed_lexer.h"
 
-b32 MatchString(const u8* buffer, u32 bufferSize, u32 *currentIndex, const u8* matchString, u32 matchStringLen)
+b32 MatchString(const u8* buffer, u32 bufferSize, u32 currentIndex, const u8* matchString, u32 matchStringLen)
 {
-    u8 prevChar = 0;
-    
-    if((*currentIndex) > 0)
+    if(currentIndex + matchStringLen > bufferSize)
     {
-        prevChar = buffer[(*currentIndex) - 1];
+        return false;
     }
     
-    if(!ALPHA_CHAR(prevChar) || (*currentIndex == 0))
+    u8 prevChar = 0;
+    
+    if(currentIndex > 0)
+    {
+        prevChar = buffer[currentIndex - 1];
+    }
+    
+    if(!ALPHA_CHAR(prevChar) || currentIndex == 0)
     {
         for(u32 i = 0; i < matchStringLen; i++)
         {
-            if((*currentIndex + i) < bufferSize)
-            {
-                if(buffer[*currentIndex + i] != matchString[i])
-                {
-                    return false;
-                }
-            }
-            else
+            if(buffer[currentIndex + i] != matchString[i])
             {
                 return false;
             }
@@ -31,9 +29,9 @@ b32 MatchString(const u8* buffer, u32 bufferSize, u32 *currentIndex, const u8* m
         return false;
     }
     
-    if(!ALPHA_CHAR(buffer[*currentIndex + matchStringLen]) || ((*currentIndex + matchStringLen) == bufferSize)) //char after last char of search word
+    //last character whitespace check
+    if(!ALPHA_CHAR(buffer[currentIndex + matchStringLen]) || (currentIndex + matchStringLen) == bufferSize)
     {
-        *currentIndex += matchStringLen;
         return true;
     }
     
@@ -72,50 +70,51 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
         }
     }
     
-    u32 keyWordCount = sizeof(C_keywords) / sizeof(u8*);
-    
     for(u32 n = 0; n < bufferSize; n++)
     {
         colorIndexBuffer[n] = COLOR_INDEX_DEFAULT;
         
         if(ALPHA_CHAR(buffer[n])) //keywords
         {
+            u32 keyWordCount = sizeof(KEYWORD_LIST(C)) / sizeof(u8*);
+            
             for(u32 m = 0; m < keyWordCount; m++)
             {
-                if(MatchString(buffer, bufferSize, &n, C_keywords[m], strlen(C_keywords[m])))
+                u8* keyWord = KEYWORD_LIST(C)[m];
+                u32 keyWordLen = strlen(keyWord);
+                
+                if(MatchString(buffer, bufferSize, n, keyWord, keyWordLen))
                 {
-                    u32 startIndex = n - strlen(C_keywords[m]);
-                    for(u32 i = startIndex; i < n; i++)
+                    u32 startIndex = n;
+                    
+                    for(u32 i = startIndex; i < (n + keyWordLen); i++)
                     {
                         colorIndexBuffer[i] = COLOR_INDEX_KEYWORD;
                     }
+                    n += keyWordLen - 1;
+                    
                     break;
                 }
             }
         }
         else if(buffer[n] == '\"') //strings
         {
-            n += 1;
             u32 startIndex = n;
-            u32 size = 0;
+            n += 1;
             
             b32 stringTokenFound = false;
-            while(buffer[n] != '\"')
+            while(n < bufferSize)
             {
-                size++;
-                n++;
-                if(buffer[n] == '\n' || n == bufferSize)
+                if(buffer[n] == '\"')
                 {
-                    stringTokenFound = false;
+                    stringTokenFound = true;
                     break;
                 }
-                stringTokenFound = true;
+                n++;
             }
             
             if(stringTokenFound)
             {
-                u32 startIndex = n - size - 1;
-                
                 for(u32 i = startIndex; i <= n; i++)
                 {
                     colorIndexBuffer[i] = COLOR_INDEX_STRING;
@@ -124,49 +123,53 @@ void Lexer(const u8 *buffer, u32 bufferSize, u8* colorIndexBuffer, u32 colorInde
         }
         else if(NUMBER_CHAR(buffer[n])) //numbers
         {
+            u8 prevChar = 0;
+            
             if(n > 1)
             {
-                if(!ALPHA_CHAR(buffer[n - 1]))
+                prevChar = buffer[n - 1];
+            }
+            
+            if(ALPHA_CHAR(prevChar))
+            {
+                while(n < bufferSize && NUMBER_CHAR(buffer[n]))
                 {
-                    while(NUMBER_CHAR(buffer[n]))
-                    {
-                        colorIndexBuffer[n] = COLOR_INDEX_NUMBER;
-                        n++;
-                    }
-                }
-                else
-                {
-                    while(NUMBER_CHAR(buffer[n]))
-                    {
-                        colorIndexBuffer[n] = COLOR_INDEX_DEFAULT;
-                        n++;
-                    }
+                    n++;
                 }
             }
+            else
+            {
+                u32 startIndex = n;
+                
+                while(n < bufferSize && NUMBER_CHAR(buffer[n]))
+                {
+                    n++;
+                }
+                
+                for(u32 i = startIndex; i < n; i++)
+                {
+                    colorIndexBuffer[i] = COLOR_INDEX_NUMBER;
+                }
+            }
+            
         }
-        
         else if(buffer[n] == '\'' && buffer[n + 2] == '\'') //single character
         {
             colorIndexBuffer[n] = COLOR_INDEX_NUMBER;
             colorIndexBuffer[n + 1] = COLOR_INDEX_NUMBER;
             colorIndexBuffer[n + 2] = COLOR_INDEX_NUMBER;
-            n += 2;
+            n += 3;
         }
         else if(buffer[n] == '/' && buffer[n + 1] == '/') //comments
         {
             u32 startIndex = n;
-            u32 size = 0;
-            
-            while(buffer[n] != '\n' && n < bufferSize)
-            {
-                size++;
-                n++;
-            }
+            u32 size = bufferSize - n;
             
             for(u32 i = startIndex; i < (startIndex + size); i++)
             {
                 colorIndexBuffer[i] = COLOR_INDEX_COMMENT;
             }
+            n += size;
         }
     }
 }
