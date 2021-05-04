@@ -3,6 +3,7 @@
 
 #include "sed_types.h"
 
+#define HEX_TO_RGB(x) ((Color){.r = (x >> 0) & 0xFF, .g = (x >> 8) & 0xFF, .b = (x >> 16) & 0xFF, .a = 0xFF})
 #define PACK_RGBA_INTO_U32(color) ((color.r << 0) | (color.g << 8) | (color.b << 16) | (color.a << 24))
 
 typedef struct Color

@@ -4,4 +4,8 @@ bin/*.ilk
 bin/*.pdb
 bin/*.sln
 bin/.vs
+bin/*.ts
+bin/*.py
+bin/*.c
 .gitignore
+

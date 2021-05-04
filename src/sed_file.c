@@ -50,7 +50,7 @@ File ReadFileNullTerminate(const u8 *fileName)
 
 void WriteFileU8(const u8 *fileName, u8 *buffer, u32 size)
 {
-    HANDLE fileHnd = CreateFileA(fileName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE fileHnd = CreateFileA(fileName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     
     if(fileHnd != INVALID_HANDLE_VALUE)
     {

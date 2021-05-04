@@ -95,7 +95,7 @@ global u8* C_keywords[] = {
 };
 
 global Color ColorLookUpTable[] = {
-    {255, 255, 255, 255}, //keywords
+    {255, 128, 0, 255}, //keywords
     {77, 191, 184, 255}, //strings
     {77, 191, 184, 255}, //numbers
     {204, 190, 164, 255}, //default text 

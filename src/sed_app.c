@@ -2,7 +2,7 @@
 // A Text Sequence is a gap buffer of ascii characters.
 // Each text sequence is a line.
 // A text buffer is gap buffer of text sequences(array of lines).
-// Each line can have upto 2 * 1024 ascii characters, if need more can be allocated on demand(Memory allocations are to be kept minimum).
+// Each line can have upto 512 ascii characters, if need more can be allocated on demand(Memory allocations are to be kept minimum).
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +25,8 @@
 #include "sed_editor.c"
 
 #include "sed_memory.h"
+#include "sed_config.h"
+#include "sed_util.h"
 
 #define SCREEN_WIDTH 1600
 #define SCREEN_HEIGHT 900
@@ -56,7 +58,7 @@ int main(int argc, char **argv)
     SDL_Rect displayBounRect = {0};
     SDL_GetDisplayBounds(SDL_GetWindowDisplayIndex(window), &displayBounRect);
     
-    printf("w: %d, h: %d\n", displayBounRect.w, displayBounRect.h);
+    //printf("w: %d, h: %d\n", displayBounRect.w, displayBounRect.h);
     
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, SCREEN_WIDTH, SCREEN_HEIGHT);
     
@@ -74,11 +76,12 @@ int main(int argc, char **argv)
     renderBuffer.width = SCREEN_WIDTH;
     renderBuffer.height = SCREEN_HEIGHT;
     
-    FontData *fontData = LoadFont("font/liberation-mono.ttf", 20.0f);
+    FontData *fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 20.0f);
     
     Editor editor = {0};
     editor.mode = EDITOR_MODE_ENTRY;
     
+    //bounds for drawing 
     editor.rect.x = 0;
     editor.rect.y = 0;
     editor.rect.width = SCREEN_WIDTH;
@@ -96,6 +99,9 @@ int main(int argc, char **argv)
     
     b32 quit = false;
     SDL_Event event = {0};
+    
+    //app config
+    AppConfig config = ParseAppConfigFile("smalled.config");
     
     while(!quit)
     {
@@ -137,7 +143,7 @@ int main(int argc, char **argv)
         }
         
         ClearBuffer(&renderBuffer, (Color){4, 35, 40, 255});
-        RenderSpace(&renderBuffer, fontData, &editor);
+        AppUpdateAndRender(&renderBuffer, fontData, &editor);
         
         SDL_UpdateTexture(texture, NULL, renderBuffer.data, 4 * renderBuffer.width);
         SDL_RenderClear(renderer);

@@ -34,10 +34,10 @@ typedef struct TextBuffer
     u32 lowestLine;
     u32 maxLinesVisible;
     
-    b32 rlMoved; //check for left right cursor movement
-    u32 lastPreSize;
+    u32 desiredCursorPos;
     
     b32 loaded;
+    
 } TextBuffer;
 
 typedef struct LineInfo

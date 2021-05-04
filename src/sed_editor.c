@@ -1,44 +1,7 @@
 #include "sed_editor.h"
+#include "sed_util.h"
 
-u32 DigitCount(u32 n)
-{
-    u32 count = 0;
-    
-    while(n)
-    {
-        n = n / 10;
-        count++;
-    }
-    
-    return count;
-}
-
-u32 Power(u32 x, u32 power)
-{
-    u32 result = 1;
-    
-    for(u32 n = 0; n < power; n++)
-    {
-        result *= x;
-    }
-    
-    return result;
-}
-
-u32 StringToInteger(const u8 *str, u32 size)
-{
-    u32 num = 0;
-    u32 power = size - 1;
-    
-    for(u32 n = 0; n < size; n++)
-    {
-        num += (str[n] - '0') * Power(10, power);
-        power--;
-    }
-    
-    return num;
-}
-
+//EVENT HANDLING FUNCTIONS
 void FileListEvent(SDL_Event *event, Editor *editor)
 {
     switch(event->type)
@@ -92,6 +55,7 @@ void FileListEvent(SDL_Event *event, Editor *editor)
                 {
                     u32 nLines = 0;
                     LineInfo *lineInfo = PreprocessFileBuffer(file.buffer, file.size, &nLines);
+                    
                     printf("line count: %d\n", nLines);
                     
                     //TODO(abhicv): free previous allocated textBuffer
@@ -116,7 +80,7 @@ void FileListEvent(SDL_Event *event, Editor *editor)
                     textBuffer.lines[0].colorIndexBuffer = (u8*)AllocatePersistentMemory(FIXED_LINE_SIZE_IN_BYTES * textBuffer.capacity);
                     for(u32 n = 1; n < textBuffer.capacity; n++)
                     {
-                        textBuffer.lines[n].colorIndexBuffer = textBuffer.lines[0].colorIndexBuffer + (FIXED_LINE_SIZE_IN_BYTES * n); 
+                        textBuffer.lines[n].colorIndexBuffer = textBuffer.lines[0].colorIndexBuffer + (FIXED_LINE_SIZE_IN_BYTES * n);
                     }
                     
                     LoadTextBuffer(file.buffer, file.size, lineInfo, nLines, &textBuffer);
@@ -159,6 +123,7 @@ void FileListEvent(SDL_Event *event, Editor *editor)
             {
                 editor->fileList.selectedIndex = 2;
             }
+            
             printf("file: %s, type: %I32u\n", editor->fileList.files[editor->fileList.selectedIndex].cFileName, editor->fileList.files[editor->fileList.selectedIndex].dwFileAttributes);
         }
         break;
@@ -239,10 +204,12 @@ void EditEvent(SDL_Event *event, Editor *editor)
             if(tSeq->preSize > 0)
             {
                 DeleteItem(tSeq);
+                textBuffer->desiredCursorPos = tSeq->preSize;
             }
             else
             {
                 DeleteLine(textBuffer);
+                textBuffer->desiredCursorPos = editor->textBuffer.lines[textBuffer->currentLine].preSize;
             }
         }
         else if(event->key.keysym.sym == SDLK_RETURN)
@@ -283,7 +250,7 @@ void EditEvent(SDL_Event *event, Editor *editor)
             editor->mode = EDITOR_MODE_FILE_LIST;
             ListFileInDirectory(&editor->fileList);
         }
-        else if(ctrlDown && event->key.keysym.sym == SDLK_s)
+        else if(ctrlDown && event->key.keysym.sym == SDLK_s) //save file
         {
             u32 size = GetTextBufferSize(&editor->textBuffer);
             u8* buffer = (u8*)malloc(size);
@@ -309,20 +276,19 @@ void EditEvent(SDL_Event *event, Editor *editor)
         }
         break;
         
+        case SDL_MOUSEWHEEL:
+        if(event->wheel.y > 0) // scroll up
+        {
+            MoveCursorUp(textBuffer);
+        }
+        else if(event->wheel.y < 0) // scroll down
+        {
+            MoveCursorDown(textBuffer);
+        }
+        break;
+        
         case SDL_TEXTINPUT:
         InsertItem(tSeq, event->text.text[0]);
-        
-        if(event->text.text[0] == '"')
-        {
-            InsertItem(tSeq, '"');
-            MoveCursorLeftLocal(tSeq);
-        }
-        else if(event->text.text[0] == '{')
-        {
-            InsertItem(tSeq, '}');
-            MoveCursorLeftLocal(tSeq);
-        }
-        
         break;
     }
 }
@@ -349,7 +315,9 @@ void EditorSpaceEvent(SDL_Event *event, Editor *editor)
     }
 }
 
-void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
+//RENDERING FUNCTIONS
+
+void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *editor)
 {
     TextBuffer *textBuffer = &editor->textBuffer;
     
@@ -362,7 +330,7 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     Rect lineMargin = {0};
     lineMargin.x = header.x;
     lineMargin.y = header.y + header.height;
-    lineMargin.width = 10 + DigitCount(textBuffer->lowestLine + textBuffer->maxLinesVisible) * fontData->charDatas[(u32)('0')].xadvance;
+    lineMargin.width = 10 + DigitCount(textBuffer->preSize + textBuffer->postSize) * fontData->charDatas[(u32)('0')].xadvance;
     lineMargin.height = editor->rect.height - header.height;
     
     Rect caret = {0};
@@ -376,7 +344,6 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     lineHighlight.y = caret.y;
     lineHighlight.width = editor->rect.width - lineMargin.width;
     lineHighlight.height = caret.height;
-    
     
     textBuffer->maxLinesVisible = ((editor->rect.height - header.height) / fontData->lineHeight) + 1;
     
@@ -421,7 +388,7 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     
     highestLineNumber = highestLineNumber < (textBuffer->capacity - 1) ? highestLineNumber : (textBuffer->capacity - 1);
     
-    caret.y = caret.y + (textBuffer->currentLine - textBuffer->lowestLine) * caret.height;
+    caret.y = header.y + header.height + ((textBuffer->currentLine - textBuffer->lowestLine) * caret.height);
     lineHighlight.y = caret.y;
     
     //Rendering
@@ -435,7 +402,7 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
         //line highlight
         DrawRect(renderBuffer, &lineHighlight, (Color){28, 60, 55, 255});
         
-        //caret
+        //caret(cursor)
         DrawRect(renderBuffer, &caret, (Color){135, 223, 148, 255});
         
         u32 totalLineCount = textBuffer->preSize + textBuffer->postSize;
@@ -460,9 +427,10 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
                 
                 u32 x = nDigits * fontData->charDatas[(u32)'0'].xadvance + 4;
                 
+                //highlighting current line number
                 if(n == textBuffer->currentLine)
                 {
-                    RenderText(renderBuffer, lineNumText, nDigits, fontData, lineMargin.x + lineMargin.width - x, y, (Color){255, 255, 255, 255}, editor->rect);
+                    RenderText(renderBuffer, lineNumText, nDigits, fontData, lineMargin.x + lineMargin.width - x, y, (Color){255, 255, 0, 255}, editor->rect);
                 }
                 else
                 {
@@ -550,7 +518,7 @@ void RenderEditorSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
         }
     }
     
-    //border
+    //editor space border
     DrawRectWire(renderBuffer, &editor->rect, (Color){255, 255, 255, 255});
 }
 
@@ -575,14 +543,16 @@ void RenderFileLister(Buffer *renderBuffer, FontData *fontData, Editor *editor)
         }
         else
         {
-            //DrawRectWire(renderBuffer, &rect, (Color){135, 223, 148, 255});
+            DrawRectWire(renderBuffer, &rect, (Color){135, 223, 148, 255});
             textColor = (Color){204, 190, 164, 255};
         }
         
         if(fileList->files[n].dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         {
             // directory
-            u32 end = RenderText(renderBuffer, fileList->files[n].cFileName, strlen(fileList->files[n].cFileName), fontData, rect.x + 5, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
+            u32 end = RenderText(renderBuffer, fileList->files[n].cFileName, 
+                                 strlen(fileList->files[n].cFileName), fontData, rect.x + 5, rect.y + (fontData->lineHeight / 2), 
+                                 textColor, editor->rect);
             
             RenderText(renderBuffer, "/", 1, fontData, end, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
         }
@@ -614,13 +584,13 @@ void RenderEntry(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     RenderText(renderBuffer, openText, strlen(openText), fontData, x, y ,(Color){255, 255, 255, 255}, editor->rect);
 }
 
-void RenderSpace(Buffer *renderBuffer, FontData *fontData, Editor *editor)
+void AppUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *editor)
 {
     switch(editor->mode)
     {
         case EDITOR_MODE_EDIT:
         case EDITOR_MODE_GOTO_LINE:
-        RenderEditorSpace(renderBuffer, fontData, editor);
+        EditorUpdateAndRender(renderBuffer, fontData, editor);
         break;
         
         case EDITOR_MODE_FILE_LIST:

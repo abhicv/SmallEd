@@ -9,10 +9,6 @@ void InsertItem(TextSequence *tSeq, u8 character)
         tSeq->preSize++;
         tSeq->gapSize--;
     }
-    else
-    {
-        //TODO(abhicv): resize text buffer to create new gap
-    }
 }
 
 void DeleteItem(TextSequence *tSeq)
@@ -49,6 +45,36 @@ void MoveCursorRightLocal(TextSequence *tSeq)
         
         tSeq->preSize++;
         tSeq->postSize--;
+    }
+}
+
+void MoveCursorToLeftPosition(TextSequence *tSeq, u32 position)
+{
+    while(tSeq->preSize > position)
+    {
+        MoveCursorLeftLocal(tSeq);
+    }
+}
+
+void MoveCursorToRightPosition(TextSequence *tSeq, u32 position)
+{
+    while(tSeq->preSize < position)
+    {
+        MoveCursorRightLocal(tSeq);
+    }
+}
+
+void MoveCursorToPosition(TextSequence *tSeq, u32 position)
+{
+    position = (position > (tSeq->preSize + tSeq->postSize)) ? (tSeq->preSize + tSeq->postSize) : position;
+    
+    if(tSeq->preSize < position)
+    {
+        MoveCursorToRightPosition(tSeq, position);
+    }
+    else if(tSeq->preSize > position)
+    {
+        MoveCursorToLeftPosition(tSeq, position);
     }
 }
 
@@ -123,30 +149,30 @@ void LoadTextBuffer(u8 *fileBuffer, u32 fileSize, LineInfo *lineInfos, u32 nLine
 
 void InsertLine(TextBuffer *textBuffer)
 {
-    TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
-    
-    tSeq->bufferCapacity = FIXED_LINE_SIZE_IN_BYTES;
-    
-    //tSeq->buffer = (u8*)AllocatePersistentMemory(tSeq->bufferCapacity);
-    //tSeq->colorIndexBuffer = (u8*)AllocatePersistentMemory(tSeq->bufferCapacity);
-    
-    tSeq->preSize = 0;
-    tSeq->postSize = textBuffer->lines[textBuffer->currentLine].postSize;
-    tSeq->gapSize = tSeq->bufferCapacity - tSeq->postSize;
-    
-    if(tSeq->postSize > 0)
+    if(textBuffer->gapSize > 0)
     {
-        memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], 
-               &textBuffer->lines[textBuffer->currentLine].buffer[textBuffer->lines[textBuffer->currentLine].bufferCapacity - tSeq->postSize], 
-               tSeq->postSize);
+        TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
+        
+        tSeq->bufferCapacity = FIXED_LINE_SIZE_IN_BYTES;
+        
+        tSeq->preSize = 0;
+        tSeq->postSize = textBuffer->lines[textBuffer->currentLine].postSize;
+        tSeq->gapSize = tSeq->bufferCapacity - tSeq->postSize;
+        
+        if(tSeq->postSize > 0)
+        {
+            memcpy(&tSeq->buffer[tSeq->bufferCapacity - tSeq->postSize], 
+                   &textBuffer->lines[textBuffer->currentLine].buffer[textBuffer->lines[textBuffer->currentLine].bufferCapacity - tSeq->postSize], 
+                   tSeq->postSize);
+        }
+        
+        //shrinking previous line
+        textBuffer->lines[textBuffer->currentLine].postSize = 0;
+        
+        textBuffer->preSize++;
+        textBuffer->gapSize--;
+        textBuffer->currentLine++;
     }
-    
-    //shrinking previous line
-    textBuffer->lines[textBuffer->currentLine].postSize = 0;
-    
-    textBuffer->preSize++;
-    textBuffer->gapSize--;
-    textBuffer->currentLine++;
 }
 
 void DeleteLine(TextBuffer *textBuffer)
@@ -159,11 +185,6 @@ void DeleteLine(TextBuffer *textBuffer)
         while(tSeq->postSize > 0)
         {
             MoveCursorRightLocal(tSeq);
-        }
-        
-        for(u32 n = 0; n < cTSeq->preSize; n++)
-        {
-            InsertItem(tSeq, cTSeq->buffer[n]);
         }
         
         if(cTSeq->postSize > 0)
@@ -192,11 +213,15 @@ void MoveCursorUp(TextBuffer *textBuffer)
         u32 fromIndex = textBuffer->preSize - 1;
         u32 toIndex = textBuffer->capacity - textBuffer->postSize - 1;
         
+        TextSequence tmp = textBuffer->lines[toIndex];
         textBuffer->lines[toIndex] = textBuffer->lines[fromIndex];
+        textBuffer->lines[fromIndex] = tmp;
         
         textBuffer->preSize--;
         textBuffer->postSize++;
         textBuffer->currentLine--;
+        
+        MoveCursorToPosition(&textBuffer->lines[textBuffer->currentLine], textBuffer->desiredCursorPos);
     }
 }
 
@@ -207,11 +232,15 @@ void MoveCursorDown(TextBuffer *textBuffer)
         u32 fromIndex = textBuffer->capacity - textBuffer->postSize;
         u32 toIndex = textBuffer->preSize;
         
+        TextSequence tmp = textBuffer->lines[toIndex];
         textBuffer->lines[toIndex] = textBuffer->lines[fromIndex];
+        textBuffer->lines[fromIndex] = tmp;
         
         textBuffer->preSize++;
         textBuffer->postSize--;
         textBuffer->currentLine++;
+        
+        MoveCursorToPosition(&textBuffer->lines[textBuffer->currentLine], textBuffer->desiredCursorPos);
     }
 }
 
@@ -223,14 +252,17 @@ void MoveCursorRight(TextBuffer *textBuffer)
     }
     else
     {
-        MoveCursorDown(textBuffer);
-        
-        while(textBuffer->lines[textBuffer->currentLine].preSize > 0)
+        if(textBuffer->postSize > 0)
         {
-            MoveCursorLeftLocal(&textBuffer->lines[textBuffer->currentLine]);
+            MoveCursorDown(textBuffer);
+            
+            while(textBuffer->lines[textBuffer->currentLine].preSize > 0)
+            {
+                MoveCursorLeftLocal(&textBuffer->lines[textBuffer->currentLine]);
+            }
         }
     }
-    
+    textBuffer->desiredCursorPos = textBuffer->lines[textBuffer->currentLine].preSize;
 }
 
 void MoveCursorLeft(TextBuffer *textBuffer)
@@ -239,15 +271,20 @@ void MoveCursorLeft(TextBuffer *textBuffer)
     {
         MoveCursorLeftLocal(&textBuffer->lines[textBuffer->currentLine]);
     }
-    else if(textBuffer->preSize > 1)
+    else
     {
-        MoveCursorUp(textBuffer);
-        
-        while(textBuffer->lines[textBuffer->currentLine].postSize > 0)
+        if(textBuffer->preSize > 1)
         {
-            MoveCursorRightLocal(&textBuffer->lines[textBuffer->currentLine]);
+            MoveCursorUp(textBuffer);
+            
+            while(textBuffer->lines[textBuffer->currentLine].postSize > 0)
+            {
+                MoveCursorRightLocal(&textBuffer->lines[textBuffer->currentLine]);
+            }
         }
     }
+    
+    textBuffer->desiredCursorPos = textBuffer->lines[textBuffer->currentLine].preSize;
 }
 
 void GotoLine(TextBuffer *textBuffer, u32 lineNum)
@@ -306,38 +343,61 @@ u32 GetTextBufferSize(TextBuffer *textBuffer)
 void TextBufferToPlainBuffer(TextBuffer *textBuffer, u8 *buffer)
 {
     u32 offset = 0;
-    for(u32 n = 0; n < textBuffer->preSize; n++)
-    {
-        memcpy(buffer + offset, textBuffer->lines[n].buffer, textBuffer->lines[n].preSize);
-        offset += textBuffer->lines[n].preSize;
-        memcpy(buffer + offset, textBuffer->lines[n].buffer + textBuffer->lines[n].bufferCapacity - textBuffer->lines[n].postSize, textBuffer->lines[n].postSize);
-        
-        offset += textBuffer->lines[n].postSize;
-        buffer[offset] = '\n';
-        offset++;
-    }
+    u32 lineCount = textBuffer->preSize + textBuffer->postSize;
     
-    for(u32 n = textBuffer->capacity - textBuffer->postSize; n < textBuffer->capacity; n++)
+    if(buffer != NULL)
     {
-        memcpy(buffer + offset, textBuffer->lines[n].buffer, textBuffer->lines[n].preSize);
-        offset += textBuffer->lines[n].preSize;
-        memcpy(buffer + offset, textBuffer->lines[n].buffer + textBuffer->lines[n].bufferCapacity - textBuffer->lines[n].postSize, textBuffer->lines[n].postSize);
-        
-        offset += textBuffer->lines[n].postSize;
-        
-        if(n < textBuffer->capacity - 1)
+        u32 n = 0;
+        for(n = 0; n < textBuffer->preSize; n++)
         {
-            buffer[offset] = '\n';
+            if(textBuffer->lines[n].preSize > 0)
+            {
+                memcpy(buffer + offset, textBuffer->lines[n].buffer, textBuffer->lines[n].preSize);
+                offset += textBuffer->lines[n].preSize;
+            }
+            
+            if(textBuffer->lines[n].postSize > 0)
+            {
+                memcpy(buffer + offset, textBuffer->lines[n].buffer + textBuffer->lines[n].bufferCapacity - textBuffer->lines[n].postSize, textBuffer->lines[n].postSize);
+                offset += textBuffer->lines[n].postSize;
+            }
+            
+            if(n != (lineCount - 1))
+            {
+                buffer[offset] = '\n';
+                offset++;
+            }
         }
         
-        offset++;
+        if(textBuffer->postSize > 0)
+        {
+            for(n = (textBuffer->capacity - textBuffer->postSize); n < textBuffer->capacity; n++)
+            {
+                if(textBuffer->lines[n].preSize > 0)
+                {
+                    memcpy(buffer + offset, textBuffer->lines[n].buffer, textBuffer->lines[n].preSize);
+                    offset += textBuffer->lines[n].preSize;
+                }
+                
+                if(textBuffer->lines[n].postSize > 0)
+                {
+                    memcpy(buffer + offset, textBuffer->lines[n].buffer + textBuffer->lines[n].bufferCapacity - textBuffer->lines[n].postSize, textBuffer->lines[n].postSize);
+                    offset += textBuffer->lines[n].postSize;
+                }
+                
+                if(n != (textBuffer->capacity - 1))
+                {
+                    buffer[offset] = '\n';
+                    offset++;
+                }
+            }
+        }
     }
     
     return;
 }
 
-//Process file buffer at load time to get  line information and line count in the loaded file
-
+//Process file buffer at load time to get line information and line count
 LineInfo* PreprocessFileBuffer(u8 *buffer, u32 bufferSize, u32 *nLines)
 {
     u32 lineCount = 0;
