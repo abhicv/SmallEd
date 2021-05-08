@@ -5,6 +5,7 @@
 
 #include "sed_memory.h"
 #include "sed_types.h"
+#include "sed_font.h"
 
 typedef struct File
 {
@@ -24,6 +25,8 @@ typedef struct FileList
     u32 fileCount;
     u32 selectedIndex;
     u8 currentDir[MAX_FILE_PATH_SIZE];
+    
+    FontData *fileIconFont;
     
 } FileList;
 

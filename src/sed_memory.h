@@ -24,7 +24,7 @@ global MemoryArena arena;
 void InitGlobalMemoryArena()
 {
     arena.persistentStorageOffset = 0;
-    arena.persistentStorageSize = MegaByte(100);
+    arena.persistentStorageSize = MegaByte(500);
     arena.transientStorageOffset = 0;
     arena.transientStorageSize = MegaByte(64);
     

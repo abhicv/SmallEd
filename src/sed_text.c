@@ -78,7 +78,7 @@ void MoveCursorToPosition(TextSequence *tSeq, u32 position)
     }
 }
 
-#define FIXED_LINE_SIZE_IN_BYTES 512
+#define FIXED_LINE_SIZE_IN_BYTES 2048
 
 //text buffer
 //loading text file as lines into the text buffer
@@ -153,7 +153,7 @@ void InsertLine(TextBuffer *textBuffer)
     {
         TextSequence *tSeq = &textBuffer->lines[textBuffer->preSize];
         
-        tSeq->bufferCapacity = FIXED_LINE_SIZE_IN_BYTES;
+        //tSeq->bufferCapacity = FIXED_LINE_SIZE_IN_BYTES;
         
         tSeq->preSize = 0;
         tSeq->postSize = textBuffer->lines[textBuffer->currentLine].postSize;

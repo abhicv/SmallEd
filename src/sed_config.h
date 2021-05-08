@@ -21,6 +21,12 @@ typedef struct AppConfig
     
 } AppConfig;
 
+typedef struct AppThemeStyle
+{
+    Color bg;
+    
+} AppThemeStyle;
+
 #define MAX_STRING_MAP_SIZE 50
 typedef struct StringMap
 {
@@ -131,19 +137,69 @@ b32 GetAttribIndexFromStringMap(StringMap *map, u8 *attrib, u32 *index)
 
 AppConfig ParseAppConfigFile(const u8 *appConfigFileName)
 {
-    AppConfig result = {0};
+    AppConfig appConfig = {0};
     
-    File appConfig = ReadFileNullTerminate(appConfigFileName);
+    File appConfigFile = ReadFileNullTerminate(appConfigFileName);
     
-    if(appConfig.loaded)
+    if(appConfigFile.loaded)
     {
         //split all attribute into a Map(String::String)
-        StringMap map = SplitIntoStringMap(appConfig.buffer, appConfig.size);
+        StringMap map = SplitIntoStringMap(appConfigFile.buffer, appConfigFile.size);
         
         u32 index = 0;
-        if(GetAttribIndexFromStringMap(&map, "\0", &index))
+        
+        //Line highlight
+        if(GetAttribIndexFromStringMap(&map, "highlight_line_at_cursor\0", &index))
         {
-            
+            if(map.value[index])
+            {
+                appConfig.enableLineHighlight = StringToBoolean(map.value[index]);
+            }
+        }
+        
+        //line number
+        if(GetAttribIndexFromStringMap(&map, "show_line_numbers\0", &index))
+        {
+            if(map.value[index])
+            {
+                appConfig.enableLineNumber = StringToBoolean(map.value[index]);
+            }
+        }
+        
+        //font file
+        if(GetAttribIndexFromStringMap(&map, "font_file\0", &index))
+        {
+            if(map.value[index])
+            {
+                u32 size = strlen(map.value[index]);
+                appConfig.fontFile = (u8*)malloc(size + 1);
+                appConfig.fontFile[size] = 0;
+                memcpy(appConfig.fontFile, map.value[index], size);
+            }
+        }
+        
+        //theme file
+        if(GetAttribIndexFromStringMap(&map, "theme_file\0", &index))
+        {
+            if(map.value[index])
+            {
+                u32 size = strlen(map.value[index]);
+                appConfig.themeFile = (u8*)malloc(size + 1);
+                appConfig.themeFile[size] = 0;
+                memcpy(appConfig.themeFile, map.value[index], size);
+            }
+        }
+        
+        //user_name
+        if(GetAttribIndexFromStringMap(&map, "user_name\0", &index))
+        {
+            if(map.value[index])
+            {
+                u32 size = strlen(map.value[index]);
+                appConfig.userName = (u8*)malloc(size + 1);
+                appConfig.userName[size] = 0;
+                memcpy(appConfig.userName, map.value[index], size);
+            }
         }
         
         FreeStringMap(&map);
@@ -153,7 +209,7 @@ AppConfig ParseAppConfigFile(const u8 *appConfigFileName)
         printf("Error opening App config file!!\n");
     }
     
-    return result;
+    return appConfig;
 }
 
 #endif //SED_CONFIG_H

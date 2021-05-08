@@ -78,6 +78,7 @@ void FileListEvent(SDL_Event *event, Editor *editor)
                     
                     //TODO(abhicv): reconsider colorIndexBuffer for syntax highlighting
                     textBuffer.lines[0].colorIndexBuffer = (u8*)AllocatePersistentMemory(FIXED_LINE_SIZE_IN_BYTES * textBuffer.capacity);
+                    
                     for(u32 n = 1; n < textBuffer.capacity; n++)
                     {
                         textBuffer.lines[n].colorIndexBuffer = textBuffer.lines[0].colorIndexBuffer + (FIXED_LINE_SIZE_IN_BYTES * n);
@@ -524,42 +525,70 @@ void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *edi
 
 void RenderFileLister(Buffer *renderBuffer, FontData *fontData, Editor *editor)
 {
+    FileList *fileList = &editor->fileList;
+    Color textColor = {204, 190, 164, 255};
+    
+    //current directory header
+    Rect headerRect = {0};
+    headerRect.x = editor->rect.x;
+    headerRect.y = editor->rect.y;
+    headerRect.width = editor->rect.width;
+    headerRect.height = 1.5f * fontData->lineHeight;
+    
+    DrawRectWire(renderBuffer, &headerRect, (Color){214, 181, 139, 255});
+    
+    u32 endX = RenderText(renderBuffer, "Open:\0", strlen("Open:\0"), fontData, 
+                          headerRect.x + 5, headerRect.y  + (headerRect.height - fontData->lineHeight) / 2, 
+                          (Color){255, 255, 0, 255}, editor->rect);
+    
+    RenderText(renderBuffer, fileList->currentDir, strlen(fileList->currentDir), fontData, 
+               endX + 10, headerRect.y  + (headerRect.height - fontData->lineHeight) / 2, 
+               textColor, editor->rect);
+    
     Rect rect = {0};
     rect.x = editor->rect.x;
-    rect.y = editor->rect.y;
+    rect.y = editor->rect.y + headerRect.height;
     rect.width = editor->rect.width;
     rect.height = 2 * fontData->lineHeight;
     
-    FileList *fileList = &editor->fileList;
-    
-    Color textColor = {204, 190, 164, 255};
     
     for(u32 n = 2; n < fileList->fileCount; n++)
     {
         if(n == fileList->selectedIndex)
         {
-            DrawRect(renderBuffer, &rect, (Color){214, 181, 139, 255});
-            textColor = (Color){0, 0, 0, 255};
+            DrawRectWire(renderBuffer, &rect, (Color){214, 181, 139, 255});
+            //DrawRect(renderBuffer, &rect, (Color){214, 181, 139, 255});
+            textColor = (Color){255, 255, 0, 255};
+            //textColor = (Color){0, 0, 0, 255};
         }
         else
         {
-            DrawRectWire(renderBuffer, &rect, (Color){135, 223, 148, 255});
+            //DrawRectWire(renderBuffer, &rect, (Color){214, 181, 139, 255});
             textColor = (Color){204, 190, 164, 255};
         }
         
         if(fileList->files[n].dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         {
             // directory
-            u32 end = RenderText(renderBuffer, fileList->files[n].cFileName, 
-                                 strlen(fileList->files[n].cFileName), fontData, rect.x + 5, rect.y + (fontData->lineHeight / 2), 
+            
+            //icon rendering
+            u32 end = RenderText(renderBuffer, "d\0", 1, fileList->fileIconFont, rect.x + 10, rect.y + (rect.height - fileList->fileIconFont->lineHeight) / 2, 
                                  textColor, editor->rect);
             
-            RenderText(renderBuffer, "/", 1, fontData, end, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
+            end = RenderText(renderBuffer, fileList->files[n].cFileName, 
+                             strlen(fileList->files[n].cFileName), fontData, end + 15, rect.y + (fontData->lineHeight / 2), 
+                             textColor, editor->rect);
+            //RenderText(renderBuffer, "\\\0", 1, fontData, end, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
         }
         else
         {
             // file
-            RenderText(renderBuffer, fileList->files[n].cFileName, strlen(fileList->files[n].cFileName), fontData, rect.x + 5, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
+            
+            //icon rendering
+            u32 end  = RenderText(renderBuffer, "f\0", 1, fileList->fileIconFont, rect.x + 10, rect.y + (rect.height - fileList->fileIconFont->lineHeight) / 2, 
+                                  textColor, editor->rect);
+            
+            RenderText(renderBuffer, fileList->files[n].cFileName, strlen(fileList->files[n].cFileName), fontData, end + 15, rect.y + (fontData->lineHeight / 2), textColor, editor->rect);
         }
         rect.y += rect.height;
     }
@@ -573,7 +602,7 @@ void RenderEntry(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     u32 x = (editor->rect.width / 2) - (width / 2);
     u32 y = editor->rect.y + editor->rect.height / 2;
     
-    RenderText(renderBuffer, welcomeText, strlen(welcomeText), fontData, x, y ,(Color){255, 255, 255, 255}, editor->rect);
+    RenderText(renderBuffer, welcomeText, strlen(welcomeText), fontData, x, y, (Color){255, 255, 255, 255}, editor->rect);
     
     u8 *openText = "Open File - Ctrl + O\0";
     
@@ -581,7 +610,8 @@ void RenderEntry(Buffer *renderBuffer, FontData *fontData, Editor *editor)
     x = (editor->rect.width / 2) - (width / 2);
     y = (editor->rect.height / 2) + fontData->lineHeight + 4;
     
-    RenderText(renderBuffer, openText, strlen(openText), fontData, x, y ,(Color){255, 255, 255, 255}, editor->rect);
+    u32 end = RenderText(renderBuffer, openText, strlen("Open File - \0"), fontData, x, y, (Color){255, 255, 255, 255}, editor->rect);
+    RenderText(renderBuffer, "Ctrl + O\0", strlen("Ctrl + O\0"), fontData, end, y, (Color){255, 255, 0, 255}, editor->rect);
 }
 
 void AppUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *editor)

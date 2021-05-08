@@ -1,5 +1,5 @@
 @echo off
-set lflags= SDL2.lib SDL2main.lib Shell32.lib User32.lib
+set lflags= SDL2.lib SDL2main.lib Shell32.lib User32.lib Shcore.lib
 
 set sdl2_inlcude= /I..\SDL2\include\
 set smalled_src= /I..\src\

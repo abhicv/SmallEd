@@ -111,6 +111,7 @@ void RenderFontBitMap(Buffer *renderBuffer, Rect *destRect, BitMap *atlasBitMap,
     }
 }
 
+//renders a text onto the screenand return last x draw position 
 u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontData, u32 xPos, u32 yPos, Color color, Rect clipRect)
 {
     u32 x = xPos;

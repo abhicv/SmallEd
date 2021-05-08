@@ -13,6 +13,7 @@
 
 //for windows file IO
 #include <Windows.h>
+#include <shellscalingapi.h>
 
 //common typedefs
 #include "sed_types.h"
@@ -28,18 +29,21 @@
 #include "sed_config.h"
 #include "sed_util.h"
 
+#define APP_NAME "Smalled"
 #define SCREEN_WIDTH 1600
 #define SCREEN_HEIGHT 900
 
 int main(int argc, char **argv)
 {
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    
     if(SDL_Init(SDL_INIT_EVERYTHING) != 0)
     {
         SDL_Log("Failed to initialize SDL : %s\n", SDL_GetError());
         return 1;
     }
     
-    SDL_Window *window = SDL_CreateWindow("SmallEd", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
+    SDL_Window *window = SDL_CreateWindow(APP_NAME, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_RESIZABLE);
     
     if(window == NULL)
     {
@@ -68,6 +72,7 @@ int main(int argc, char **argv)
         return 1;
     }
     
+    //virtual allocations
     InitGlobalMemoryArena();
     
     //render buffer
@@ -94,29 +99,31 @@ int main(int argc, char **argv)
     editor.gotoLineTSeq.postSize = 0;
     editor.gotoLineTSeq.gapSize = 10;
     
+    editor.fileList.fileIconFont = LoadFont("font/icons.ttf", 25.0f);
+    
     GetCurrentDirectory(256, editor.fileList.currentDir);
     printf("Current directory: %s\n", editor.fileList.currentDir);
     
-    b32 quit = false;
+    b32 quitApp = false;
     SDL_Event event = {0};
     
     //app config
     AppConfig config = ParseAppConfigFile("smalled.config");
     
-    while(!quit)
+    while(!quitApp)
     {
         while(SDL_PollEvent(&event))
         {
             switch(event.type)
             {
                 case SDL_QUIT:
-                quit = true;
+                quitApp = true;
                 break;
                 
                 case SDL_KEYDOWN:
                 if(event.key.keysym.sym == SDLK_ESCAPE)
                 {
-                    quit = true;
+                    quitApp = true;
                 }
                 break;
                 
