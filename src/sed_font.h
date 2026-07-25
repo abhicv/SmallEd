@@ -8,7 +8,6 @@
 #include "sed_render.h"
 #include "sed_debug.h"
 #include "sed_lexer.h"
-#include "sed_text.h"
 #include "sed_memory.h"
 
 #define RENDERABLE_CHAR(c) ((c >= 32) && (c <= 126)) 

@@ -9,10 +9,7 @@ void FileListEvent(SDL_Event *event, Editor *editor)
         case SDL_KEYDOWN:
         if(event->key.keysym.sym == SDLK_ESCAPE)
         {
-            if(editor->textBuffer.loaded)
-            {
-                editor->mode = EDITOR_MODE_EDIT;
-            }
+
         }
         else if(event->key.keysym.sym == SDLK_BACKSPACE)
         {
@@ -48,55 +45,13 @@ void FileListEvent(SDL_Event *event, Editor *editor)
                 printf("file path: %s\n", path);
                 
                 File file = ReadFileNullTerminate(path);
-                
-                free(path);
-                
+                                
                 if(file.loaded)
                 {
-                    u32 nLines = 0;
-                    LineInfo *lineInfo = PreprocessFileBuffer(file.buffer, file.size, &nLines);
                     
-                    printf("line count: %d\n", nLines);
-                    
-                    //TODO(abhicv): free previous allocated textBuffer
-                    
-                    TextBuffer textBuffer = {0};
-                    textBuffer.capacity = 2 * nLines;
-                    textBuffer.lines = (TextSequence*)AllocatePersistentMemory(sizeof(TextSequence) * textBuffer.capacity);
-                    textBuffer.lowestLine = 0;
-                    textBuffer.currentLine = 0;
-                    textBuffer.preSize = 0;
-                    textBuffer.postSize = nLines - 1;
-                    textBuffer.gapSize = textBuffer.capacity - nLines;
-                    
-                    textBuffer.lines[0].buffer = (u8*)AllocatePersistentMemory(FIXED_LINE_SIZE_IN_BYTES * textBuffer.capacity);
-                    
-                    for(u32 n = 1; n < textBuffer.capacity; n++)
-                    {
-                        textBuffer.lines[n].buffer = textBuffer.lines[0].buffer + (FIXED_LINE_SIZE_IN_BYTES * n); 
-                    }
-                    
-                    //TODO(abhicv): reconsider colorIndexBuffer for syntax highlighting
-                    textBuffer.lines[0].colorIndexBuffer = (u8*)AllocatePersistentMemory(FIXED_LINE_SIZE_IN_BYTES * textBuffer.capacity);
-                    
-                    for(u32 n = 1; n < textBuffer.capacity; n++)
-                    {
-                        textBuffer.lines[n].colorIndexBuffer = textBuffer.lines[0].colorIndexBuffer + (FIXED_LINE_SIZE_IN_BYTES * n);
-                    }
-                    
-                    LoadTextBuffer(file.buffer, file.size, lineInfo, nLines, &textBuffer);
-                    
-                    free(lineInfo);
-                    
-                    editor->textBuffer = textBuffer;
-                    editor->fileName = editor->fileList.files[index].cFileName;
-                    
-                    if(textBuffer.loaded)
-                    {
-                        editor->mode = EDITOR_MODE_EDIT;
-                    }
                 }
                 
+                free(path);
                 free(file.buffer);
                 file.buffer = NULL;
             }
@@ -133,39 +88,19 @@ void FileListEvent(SDL_Event *event, Editor *editor)
 
 void GotoLineEvent(SDL_Event *event, Editor *editor)
 {
-    TextBuffer *textBuffer = &editor->textBuffer;
-    
     switch(event->type)
     {
-        case SDL_KEYDOWN:
-        
+        case SDL_KEYDOWN:        
         if(event->key.keysym.sym == SDLK_BACKSPACE)
         {
-            DeleteItem(&editor->gotoLineTSeq);
         }
         else if(event->key.keysym.sym == SDLK_RETURN)
-        {
-            if(editor->gotoLineTSeq.preSize > 0)
-            {
-                u32 lineNum = StringToInteger(editor->gotoLineTSeq.buffer, editor->gotoLineTSeq.preSize);
-                GotoLine(textBuffer, lineNum);
-                
-                editor->gotoLineTSeq.gapSize = editor->gotoLineTSeq.bufferCapacity;
-                editor->gotoLineTSeq.preSize = 0;
-                editor->gotoLineTSeq.postSize = 0;
-            }
-            
+        {            
             editor->mode = EDITOR_MODE_EDIT;
         }
         break;
         
         case SDL_TEXTINPUT:
-        u8 n = event->text.text[0];
-        
-        if(n >= '0' && n <= '9')
-        {
-            InsertItem(&editor->gotoLineTSeq, n);
-        }
         break;
     }
 }
@@ -175,6 +110,7 @@ void EntryEvent(SDL_Event *event, Editor *editor)
     switch(event->type)
     {
         case SDL_KEYDOWN:
+
         b32 leftCtrlDown = (SDL_GetModState() & KMOD_LCTRL) == KMOD_LCTRL;
         b32 rightCtrlDown = (SDL_GetModState() & KMOD_RCTRL) == KMOD_RCTRL;
         b32 ctrlDown = (leftCtrlDown || rightCtrlDown);
@@ -190,8 +126,6 @@ void EntryEvent(SDL_Event *event, Editor *editor)
 
 void EditEvent(SDL_Event *event, Editor *editor)
 {
-    TextBuffer *textBuffer = &editor->textBuffer;
-    TextSequence *tSeq = &editor->textBuffer.lines[textBuffer->currentLine];
     
     switch(event->type)
     {
@@ -202,44 +136,27 @@ void EditEvent(SDL_Event *event, Editor *editor)
         
         if(event->key.keysym.sym == SDLK_BACKSPACE)
         {
-            if(tSeq->preSize > 0)
-            {
-                DeleteItem(tSeq);
-                textBuffer->desiredCursorPos = tSeq->preSize;
-            }
-            else
-            {
-                DeleteLine(textBuffer);
-                textBuffer->desiredCursorPos = editor->textBuffer.lines[textBuffer->currentLine].preSize;
-            }
         }
         else if(event->key.keysym.sym == SDLK_RETURN)
         {
-            InsertLine(textBuffer);
         }
         else if(event->key.keysym.sym == SDLK_TAB)
         {
-            InsertItem(tSeq, '\t');
         }
         else if(event->key.keysym.sym == SDLK_LEFT)
         {
-            MoveCursorLeft(textBuffer);
         }
         else if(event->key.keysym.sym == SDLK_RIGHT)
         {
-            MoveCursorRight(textBuffer);
         }
         else if(event->key.keysym.sym == SDLK_UP)
         {
-            MoveCursorUp(textBuffer);
         }
         else if(event->key.keysym.sym == SDLK_DOWN)
         {
-            MoveCursorDown(textBuffer);
         }
         else if(ctrlDown && event->key.keysym.sym == SDLK_d)
         {
-            DeleteLine(textBuffer);
         }
         else if(ctrlDown && event->key.keysym.sym == SDLK_g)
         {
@@ -253,43 +170,20 @@ void EditEvent(SDL_Event *event, Editor *editor)
         }
         else if(ctrlDown && event->key.keysym.sym == SDLK_s) //save file
         {
-            u32 size = GetTextBufferSize(&editor->textBuffer);
-            u8* buffer = (u8*)malloc(size);
-            memset(buffer, 0, size);
-            
-            TextBufferToPlainBuffer(&editor->textBuffer, buffer);
-            
-            u32 fileNameLen = strlen(editor->fileName) + strlen(editor->fileList.currentDir) + 2;
-            u8 *fileName = (u8*)malloc(fileNameLen);
-            memset(fileName, 0, fileNameLen);
-            
-            memcpy(fileName, editor->fileList.currentDir, strlen(editor->fileList.currentDir));
-            fileName[strlen(editor->fileList.currentDir)] = '\\';
-            memcpy(fileName + strlen(editor->fileList.currentDir) + 1, editor->fileName, strlen(editor->fileName));
-            fileName[fileNameLen - 1] = 0;
-            
-            WriteFileU8(fileName, buffer, size);
-            
-            printf("File saved to %s\n", fileName);
-            
-            free(buffer);
-            free(fileName);
+
         }
         break;
         
         case SDL_MOUSEWHEEL:
         if(event->wheel.y > 0) // scroll up
         {
-            MoveCursorUp(textBuffer);
         }
         else if(event->wheel.y < 0) // scroll down
         {
-            MoveCursorDown(textBuffer);
         }
         break;
         
         case SDL_TEXTINPUT:
-        InsertItem(tSeq, event->text.text[0]);
         break;
     }
 }
@@ -320,7 +214,6 @@ void EditorSpaceEvent(SDL_Event *event, Editor *editor)
 
 void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *editor)
 {
-    TextBuffer *textBuffer = &editor->textBuffer;
     
     Rect header = {0};
     header.x = editor->rect.x;
@@ -331,7 +224,7 @@ void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *edi
     Rect lineMargin = {0};
     lineMargin.x = header.x;
     lineMargin.y = header.y + header.height;
-    lineMargin.width = 10 + DigitCount(textBuffer->preSize + textBuffer->postSize) * fontData->charDatas[(u32)('0')].xadvance;
+    lineMargin.width = 10 + 100 * fontData->charDatas[(u32)('0')].xadvance;
     lineMargin.height = editor->rect.height - header.height;
     
     Rect caret = {0};
@@ -345,53 +238,17 @@ void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *edi
     lineHighlight.y = caret.y;
     lineHighlight.width = editor->rect.width - lineMargin.width;
     lineHighlight.height = caret.height;
-    
-    textBuffer->maxLinesVisible = ((editor->rect.height - header.height) / fontData->lineHeight) + 1;
-    
-    //caret(cursor) position
-    {
-        u8 *lineBuffer = textBuffer->lines[textBuffer->currentLine].buffer;
         
-        for(u32 n = 0; n < textBuffer->lines[textBuffer->currentLine].preSize; n++)
-        {
-            u8 c = lineBuffer[n];
-            
-            if(c == '\t') //tab
-            {
-                caret.x += 4 * fontData->charDatas[(u32)(' ')].xadvance;
-            }
-            else if(RENDERABLE_CHAR(c))
-            {
-                caret.x += fontData->charDatas[(u32)c].xadvance;
-            }
-            else
-            {
-                caret.x += fontData->charDatas[(u32)('A')].xadvance;
-            }
-            
-            caret.width = fontData->charDatas[(u32)c].xadvance;
-        }
+    //caret(cursor) position
+    {        
+
     }
     
     //scrolling by changing lowest visible line number
     {
-        if(textBuffer->currentLine >= (textBuffer->lowestLine + textBuffer->maxLinesVisible - 1))
-        {
-            textBuffer->lowestLine++;
-        }
-        else if(textBuffer->currentLine < textBuffer->lowestLine)
-        {
-            textBuffer->lowestLine--;
-        }
+
     }
-    
-    u32 highestLineNumber = (textBuffer->capacity - textBuffer->postSize) + (textBuffer->maxLinesVisible - (textBuffer->currentLine - textBuffer->lowestLine));
-    
-    highestLineNumber = highestLineNumber < (textBuffer->capacity - 1) ? highestLineNumber : (textBuffer->capacity - 1);
-    
-    caret.y = header.y + header.height + ((textBuffer->currentLine - textBuffer->lowestLine) * caret.height);
-    lineHighlight.y = caret.y;
-    
+        
     //Rendering
     {
         //header
@@ -405,117 +262,11 @@ void EditorUpdateAndRender(Buffer *renderBuffer, FontData *fontData, Editor *edi
         
         //caret(cursor)
         DrawRect(renderBuffer, &caret, (Color){135, 223, 148, 255});
-        
-        u32 totalLineCount = textBuffer->preSize + textBuffer->postSize;
-        
-        f32 percent = (f32)(textBuffer->currentLine + 1) * 100.0f / (f32)totalLineCount;
-        
-        u8 headerText[512] = {0};
-        sprintf(headerText, "%s - line: %d\tCol: %d\t%0.1f %%\0", editor->fileName, textBuffer->currentLine + 1, textBuffer->lines[textBuffer->currentLine].preSize + 1, percent);
-        
-        RenderText(renderBuffer, headerText, strlen(headerText), fontData, header.x + 4, header.y + 2, (Color){10, 10, 10, 255}, editor->rect);
-        
-        //line numbers
-        {
-            u32 y = lineMargin.y;
-            for(u32 n  = textBuffer->lowestLine; n <= (textBuffer->lowestLine + textBuffer->maxLinesVisible); n++)
-            {
-                u32 nDigits = DigitCount(n + 1);
-                
-                u8 *lineNumText = (u8*)malloc(nDigits + 1);
-                lineNumText[nDigits] = 0;
-                sprintf(lineNumText, "%d", n + 1);
-                
-                u32 x = nDigits * fontData->charDatas[(u32)'0'].xadvance + 4;
-                
-                //highlighting current line number
-                if(n == textBuffer->currentLine)
-                {
-                    RenderText(renderBuffer, lineNumText, nDigits, fontData, lineMargin.x + lineMargin.width - x, y, (Color){255, 255, 0, 255}, editor->rect);
-                }
-                else
-                {
-                    RenderText(renderBuffer, lineNumText, nDigits, fontData, lineMargin.x + lineMargin.width - x, y, (Color){100, 100, 100, 255}, editor->rect);
-                }
-                
-                free(lineNumText);
-                
-                y += fontData->lineHeight;
-            }
-        }
-        
-        //NOTE(abhicv): lowestLineNumber to preSize
-        u32 y = lineMargin.y;
-        b32 multiCommentLine = false;
-        
-        for(u32 n = textBuffer->lowestLine; n < textBuffer->preSize; n++)
-        {
-            TextSequence *tSeq = &textBuffer->lines[n];
-            u32 size = tSeq->preSize + tSeq->postSize;
-            
-            u8* text = (u8*)malloc(size);
-            
-            memset(tSeq->colorIndexBuffer, 3, size);
-            memcpy(text, tSeq->buffer, tSeq->preSize);
-            
-            if(tSeq->postSize > 0)
-            {
-                memcpy(text + tSeq->preSize, tSeq->buffer + (tSeq->bufferCapacity - tSeq->postSize), tSeq->postSize);
-            }
-            
-            Lexer(text, size, tSeq->colorIndexBuffer, size, &multiCommentLine);
-            
-            free(text);
-            
-            b32 activeLine = (n == textBuffer->currentLine) ? true : false;
-            RenderTextSequence(renderBuffer, tSeq, fontData, lineMargin.x + lineMargin.width, y, activeLine, editor->rect);
-            y += fontData->lineHeight;
-            
-        }
-        
-        //NOTE(abhicv): postIndex to highestLineNumber
-        if(textBuffer->postSize > 0)
-        {
-            for(u32 n = (textBuffer->capacity - textBuffer->postSize); n <= highestLineNumber; n++)
-            {
-                TextSequence *tSeq = &textBuffer->lines[n];
-                
-                u32 size = tSeq->preSize + tSeq->postSize;
-                u8* text = (u8*)malloc(size);
-                
-                memset(tSeq->colorIndexBuffer, 3, size);
-                memcpy(text, tSeq->buffer, tSeq->preSize);
-                
-                if(tSeq->postSize > 0)
-                {
-                    memcpy(text+ tSeq->preSize, tSeq->buffer + (tSeq->bufferCapacity - tSeq->postSize), tSeq->postSize);
-                }
-                
-                Lexer(text, size, tSeq->colorIndexBuffer, size, &multiCommentLine);
-                
-                free(text);
-                
-                RenderTextSequence(renderBuffer, tSeq, fontData, lineMargin.x + lineMargin.width, y, false, editor->rect);
-                y += fontData->lineHeight;
-            }
-        }
-        
+                                        
         //goto line
         if(editor->mode == EDITOR_MODE_GOTO_LINE)
         {
-            Rect gotoRect = {0};
-            gotoRect.x = editor->rect.x;
-            gotoRect.y = header.y + header.height;
-            gotoRect.width = header.width;
-            gotoRect.height = header.height;
             
-            DrawRect(renderBuffer, &gotoRect, (Color){4, 35, 40, 255});
-            DrawRectWire(renderBuffer, &gotoRect, (Color){214, 181, 139, 255});
-            
-            u8 *s = "Goto Line:\0";
-            
-            u32 end = RenderText(renderBuffer, s, strlen(s), fontData, gotoRect.x + 4, gotoRect.y + 2, (Color){255, 255, 255, 255}, editor->rect);
-            RenderTextSequenceSimple(renderBuffer, &editor->gotoLineTSeq, fontData, end + 10, gotoRect.y + 2, (Color){200, 200, 200, 255}, editor->rect);
         }
     }
     

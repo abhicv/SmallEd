@@ -1,9 +1,3 @@
-// NOTE(abhicv): Smalled is a text editor with less complexity and functionality
-// A Text Sequence is a gap buffer of ascii characters.
-// Each text sequence is a line.
-// A text buffer is gap buffer of text sequences(array of lines).
-// Each line can have upto 512 ascii characters, if need more can be allocated on demand(Memory allocations are to be kept minimum).
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,15 +13,16 @@
 #include "sed_types.h"
 
 #include "sed_font.c"
-#include "sed_text.c"
 #include "sed_file.c"
 #include "sed_render.c"
 #include "sed_lexer.c"
 #include "sed_editor.c"
+#include "sed_piece_table.c"
 
 #include "sed_memory.h"
 #include "sed_config.h"
 #include "sed_util.h"
+
 
 #define APP_NAME "Smalled"
 #define SCREEN_WIDTH 1600
@@ -84,21 +79,12 @@ int main(int argc, char **argv)
     FontData *fontData = LoadFont("font/JetBrainsMono-Regular.ttf", 20.0f);
     
     Editor editor = {0};
-    editor.mode = EDITOR_MODE_ENTRY;
-    
-    //bounds for drawing 
+    editor.mode = EDITOR_MODE_ENTRY;    
     editor.rect.x = 0;
     editor.rect.y = 0;
     editor.rect.width = SCREEN_WIDTH;
     editor.rect.height = SCREEN_HEIGHT;
-    
-    //for goto line text edit box
-    editor.gotoLineTSeq.bufferCapacity = 10;
-    editor.gotoLineTSeq.buffer = (u8*)malloc(10);
-    editor.gotoLineTSeq.preSize = 0;
-    editor.gotoLineTSeq.postSize = 0;
-    editor.gotoLineTSeq.gapSize = 10;
-    
+        
     editor.fileList.fileIconFont = LoadFont("font/icons.ttf", 25.0f);
     
     GetCurrentDirectory(256, editor.fileList.currentDir);

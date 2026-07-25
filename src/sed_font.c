@@ -151,10 +151,10 @@ u32 RenderText(Buffer *renderBuffer, u8 *textBuffer, u32 size, FontData *fontDat
     
     return x;
 }
-
+/*
 void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq, 
-                        FontData *fontData, 
-                        u32 xPos, u32 yPos, b32 activeTSeq, Rect clipRect)
+FontData *fontData, 
+u32 xPos, u32 yPos, b32 activeTSeq, Rect clipRect)
 {
     u32 x = xPos;
     u32 y = yPos;
@@ -259,8 +259,8 @@ void RenderTextSequence(Buffer *renderBuffer, TextSequence *tSeq,
 }
 
 void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq, 
-                              FontData *fontData, 
-                              u32 xPos, u32 yPos, Color color, Rect clipRect)
+FontData *fontData, 
+u32 xPos, u32 yPos, Color color, Rect clipRect)
 {
     u32 x = xPos;
     u32 y = yPos;
@@ -336,3 +336,4 @@ void RenderTextSequenceSimple(Buffer *renderBuffer, TextSequence *tSeq,
         }
     }
 }
+*/
