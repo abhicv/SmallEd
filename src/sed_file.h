@@ -3,18 +3,9 @@
 
 #include <Windows.h>
 
+#include "sed_font.h"
 #include "sed_memory.h"
 #include "sed_types.h"
-#include "sed_font.h"
-
-typedef struct File
-{
-    u8 *buffer;
-    u32 size;
-    b32 loaded;
-    u8 *name;
-    
-} File;
 
 #define MAX_FILES_LISTABLE 100
 #define MAX_FILE_PATH_SIZE 512
@@ -25,11 +16,12 @@ typedef struct FileList
     u32 fileCount;
     u32 selectedIndex;
     u8 currentDir[MAX_FILE_PATH_SIZE];
-    
     FontData *fileIconFont;
-    
 } FileList;
 
-File ReadFileNullTerminate(const u8 *fileName);
+u8 *ReadFileIntoMemory(const u8 *fileName);
+void WriteFileU8(const u8 *fileName, u8 *buffer, u32 size);
+void GoUpDirectory(FileList *fileList);
+void ListFileInDirectory(FileList *fileList);
 
-#endif //SED_FILE_H
+#endif // SED_FILE_H
